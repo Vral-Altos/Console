@@ -15,44 +15,13 @@
     ],
     "headers": [
       {
-        "source": "/index.html",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "no-cache, no-store, must-revalidate"
-          }
-        ]
-      },
-      {
-        "source": "/flutter_bootstrap.js",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "no-cache, no-store, must-revalidate"
-          }
-        ]
-      },
-      {
-        "source": "/main.dart.js",
+        "//": "Flutter's file names are not versioned (main.dart.js, the trimmed icon font), so every file revalidates (cheap: ETags). Otherwise a deploy shows stale code or missing icons for up to an hour.",
+        "source": "**",
         "headers": [
           {
             "key": "Cache-Control",
             "value": "no-cache"
-          }
-        ]
-      },
-      {
-        "source": "/flutter_service_worker.js",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "no-cache, no-store, must-revalidate"
-          }
-        ]
-      },
-      {
-        "source": "**",
-        "headers": [
+          },
           {
             "key": "X-Frame-Options",
             "value": "DENY"
