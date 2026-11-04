@@ -9,6 +9,9 @@ site `va-console` in `vral-altos`): **https://va-console.web.app**.
 - **Chat** — Claude-style conversations with the agents. Messages go into the
   mailbox; the Mac worker (or the cloud runner, or a director's Devstation)
   answers, streaming its progress; Stop ends a turn and keeps what it wrote.
+  Files can be attached from the paperclip, by pasting or by dropping them;
+  they upload to the attachments bucket under `storage.rules`. `@` mentions a
+  conversation, project or agent, and the agent gets its context.
 - **Projects** — Devstations (GCE dev VMs with Claude Code) and the Factory.
 - **Logs** — Logs Explorer, Monitoring and Activity over every service's
   telemetry (`docs/architecture.md`, Telemetry) and your own audit trail.
@@ -27,6 +30,8 @@ and `firestore.rules`, which must list the same accounts).
 flutter pub get && dart run build_runner build -d
 flutter analyze && flutter test
 cd rules_tests && npm install && npm test   # needs the Firestore emulator on :8086
+npm run test:storage   # needs the Storage emulator on :9199 (firebase-tools on Java 21):
+#   JAVA_HOME=/opt/homebrew/opt/openjdk@21 npx firebase-tools emulators:start --only storage --project demo-va-console
 ```
 
 Debug builds talk to the local emulators only (Auth :9099, Firestore :8080;
@@ -39,11 +44,11 @@ against the Auth and Firestore emulators, with a real Mac worker answering:
 
 ```sh
 java -jar ~/.cache/firebase/emulators/cloud-firestore-emulator-*.jar --port 8087 --rules firestore.rules &
-npx firebase-tools emulators:start --only auth --project vral-altos &
+JAVA_HOME=/opt/homebrew/opt/openjdk@21 npx firebase-tools emulators:start --only auth,storage --project vral-altos &
 flutter build web --release --dart-define-from-file=.env --dart-define=USE_EMULATORS=true \
   --dart-define=FIRESTORE_EMULATOR_PORT=8087 -o build/e2e
 (cd build/e2e && python3 -m http.server 5055 --bind 127.0.0.1) &
-VA_MESH_PROJECT=vral-altos VA_MESH_EMULATOR=127.0.0.1:8087 VA_MESH_HOME=/tmp/va-e2e \
+VA_MESH_PROJECT=vral-altos VA_MESH_EMULATOR=127.0.0.1:8087 VA_STORAGE_EMULATOR=127.0.0.1:9199 VA_MESH_HOME=/tmp/va-e2e \
   ../../meshes/agent_mesh/build/va_agent worker &
 python3 e2e/console_e2e.py /tmp/va-e2e-shots
 ```
@@ -54,8 +59,9 @@ Closing a test conversation writes a journal entry into the real agent's
 ## Deploy
 
 ```sh
+flutter clean && flutter pub get && dart run build_runner build -d   # after adding plugins: a cached build can miss them
 flutter build web --release --dart-define-from-file=.env   # .env: Firebase web config (not committed)
-npx firebase-tools deploy --only firestore,hosting --project vral-altos
+npx firebase-tools deploy --only firestore,storage,hosting --project vral-altos   # storage: Java 21
 ```
 
 `firestore.rules` governs the **platform** database only; Financier's rules
