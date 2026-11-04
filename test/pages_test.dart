@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -269,4 +271,30 @@ void main() {
       }
     });
   }
+
+  testWidgets('before data arrives the overview says loading, not zero or "never seen"', (tester) async {
+    size(tester, const Size(1400, 2600));
+    Stream<T> never<T>() => StreamController<T>().stream;
+    await tester.pumpWidget(host(const OverviewPage(), [
+      threadsProvider.overrideWith((ref) => never()),
+      activeMessagesProvider.overrideWith((ref) => never()),
+      allStatusProvider.overrideWith((ref) => never()),
+      macStatusProvider.overrideWith((ref) => never()),
+      meshProvider.overrideWith((ref) => never()),
+      usageStatsProvider.overrideWith((ref) => never()),
+      usageDaysProvider.overrideWith((ref) => never()),
+      billingProvider.overrideWith((ref) => never()),
+      devstationsProvider.overrideWith((ref) => never()),
+      factoryRequestsProvider.overrideWith((ref) => never()),
+      approvalsProvider.overrideWith((ref) => never()),
+      clockProvider.overrideWith((ref) => const Stream.empty()),
+      authStateProvider.overrideWith((ref) => Stream.value(null)),
+    ]));
+    await tester.pump();
+    expect(find.text('Loading…'), findsNWidgets(4));
+    expect(find.text('0'), findsNothing);
+    expect(find.text('Never seen'), findsNothing);
+    expect(find.textContaining('Agents in the cloud'), findsNothing);
+    expect(find.textContaining('Waiting for the budget'), findsNothing);
+  });
 }

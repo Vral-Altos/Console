@@ -45,11 +45,16 @@ class OverviewPage extends ConsumerWidget {
           'Hosts',
           trailing: Text('CPU, memory and disk as each worker last reported', style: Theme.of(context).textTheme.labelSmall),
         ),
-        ResponsiveGrid(
-          minWidth: 300,
-          maxColumns: 4,
-          children: [for (final e in shownHosts) HostCard(id: e.key, status: e.value)],
-        ),
+        if (!ref.watch(allStatusProvider).hasValue && !ref.watch(allStatusProvider).hasError)
+          const Card(
+            child: Padding(padding: EdgeInsets.all(18), child: LinearProgressIndicator(minHeight: 2)),
+          )
+        else
+          ResponsiveGrid(
+            minWidth: 300,
+            maxColumns: 4,
+            children: [for (final e in shownHosts) HostCard(id: e.key, status: e.value)],
+          ),
         const SizedBox(height: 22),
         pair(const ActivityPanel(), const ActiveTasksPanel()),
         const SizedBox(height: 16),
@@ -122,7 +127,8 @@ class _Greeting extends ConsumerWidget {
         spacing: 8,
         runSpacing: 8,
         children: [
-          StatusPill(label: on ? 'Agents on the Mac' : 'Agents in the cloud', color: on ? t.ok : t.info),
+          if (ref.watch(macStatusProvider).hasValue)
+            StatusPill(label: on ? 'Agents on the Mac' : 'Agents in the cloud', color: on ? t.ok : t.info),
           if (approvals > 0)
             ActionChip(
               avatar: Icon(Icons.gavel, size: 16, color: t.warn),
@@ -210,6 +216,11 @@ class _Kpis extends ConsumerWidget {
     final monthCost = days.where((d) => d.day.startsWith(month)).fold<double>(0, (a, d) => a + d.costUsd);
     final series = lastDays(days, now, 14);
     const target = 15.0;
+    bool ready(AsyncValue<Object?> v) => v.hasValue;
+    final liveReady = ready(ref.watch(activeMessagesProvider));
+    final daysReady = ready(ref.watch(usageDaysProvider)) && ready(ref.watch(usageStatsProvider));
+    final billingReady = ready(ref.watch(billingProvider));
+    const loading = 'Loading…';
     return ResponsiveGrid(
       minWidth: 165,
       maxColumns: 4,
@@ -218,32 +229,36 @@ class _Kpis extends ConsumerWidget {
           label: 'Live now',
           icon: Icons.bolt,
           accent: running > 0 ? t.info : null,
-          value: '$running',
-          sub: [
-            '$running answering',
-            '$queued queued',
-            if (factory > 0) '$factory Factory job${factory == 1 ? '' : 's'}',
-          ].join(' · '),
+          value: liveReady ? '$running' : '—',
+          sub: !liveReady
+              ? loading
+              : [
+                  '$running answering',
+                  '$queued queued',
+                  if (factory > 0) '$factory Factory job${factory == 1 ? '' : 's'}',
+                ].join(' · '),
         ),
         StatTile(
           label: 'Chat turns today',
           icon: Icons.forum_outlined,
-          value: '${todayStats?.turns ?? 0}',
-          sub: '${todayStats?.failed ?? 0} failed · ${compact(todayStats?.outputTokens ?? 0)} tokens out',
-          child: Sparkline(values: [for (final d in series) d.turns.toDouble()], height: 28),
+          value: daysReady ? '${todayStats?.turns ?? 0}' : '—',
+          sub: !daysReady ? loading : '${todayStats?.failed ?? 0} failed · ${compact(todayStats?.outputTokens ?? 0)} tokens out',
+          child: !daysReady ? null : Sparkline(values: [for (final d in series) d.turns.toDouble()], height: 28),
         ),
         StatTile(
           label: 'Chat cost this month',
           icon: Icons.toll_outlined,
-          value: usd(monthCost),
-          sub: 'API-equivalent (subscription) · ${usd(stats?.costUsd ?? 0)} all time',
-          child: Sparkline(values: [for (final d in series) d.costUsd], height: 28, color: t.series[2]),
+          value: daysReady ? usd(monthCost) : '—',
+          sub: !daysReady ? loading : 'API-equivalent (subscription) · ${usd(stats?.costUsd ?? 0)} all time',
+          child: !daysReady ? null : Sparkline(values: [for (final d in series) d.costUsd], height: 28, color: t.series[2]),
         ),
         StatTile(
           label: 'GCP spend this month',
           icon: Icons.cloud_outlined,
           value: billing == null ? '—' : money(billing.costAmount, billing.currencyCode),
-          sub: billing == null
+          sub: !billingReady
+              ? loading
+              : billing == null
               ? 'Waiting for the budget’s first report (a few times a day)'
               : 'Target S\$${target.toStringAsFixed(0)} · budget ${money(billing.budgetAmount, billing.currencyCode)} · ${ago(billing.updatedAt)}',
           child: billing == null ? null : Meter(value: billing.costAmount / target, warnAt: .66, badAt: 1),

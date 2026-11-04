@@ -318,6 +318,7 @@ class NewChatView extends ConsumerWidget {
     final narrow = MediaQuery.sizeOf(context).width < 600;
 
     String where(String a) {
+      if (!ref.watch(allStatusProvider).hasValue) return '';
       if (a.startsWith('director-')) {
         final id = a.substring(9);
         return isFresh(hosts['devstation-$id'], now) ? 'On Devstation $id' : 'Devstation $id is stopped';
@@ -417,8 +418,10 @@ class _AgentCard extends StatelessWidget {
                       padding: const EdgeInsets.only(top: 2),
                       child: Text(description!, maxLines: 2, overflow: TextOverflow.ellipsis, style: text.bodySmall?.copyWith(color: t.muted)),
                     ),
-                  const SizedBox(height: 6),
-                  Text(where, style: text.labelSmall?.copyWith(color: t.faint)),
+                  if (where.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(where, style: text.labelSmall?.copyWith(color: t.faint)),
+                  ],
                 ]),
               ),
             ]),
