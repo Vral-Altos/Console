@@ -42,12 +42,19 @@ service cloud.firestore {
     // status changes come from the workers.
     match /messages/{messageId} {
       allow read: if isOwner();
+      // Attachments (files in the attachments bucket, storage.rules) and
+      // @mentions: at most 10 each; with files the text may be empty.
       allow create: if isOwner()
-        && request.resource.data.keys().hasOnly(['threadId', 'role', 'kind', 'text', 'status', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['threadId', 'role', 'kind', 'text', 'status', 'createdAt', 'attachments', 'mentions'])
         && request.resource.data.role == 'operator'
         && request.resource.data.status == 'queued'
         && request.resource.data.kind in ['turn', 'close']
-        && isShortString(request.resource.data.text, 20000)
+        && (!('attachments' in request.resource.data) || (request.resource.data.attachments is list
+          && request.resource.data.attachments.size() > 0 && request.resource.data.attachments.size() <= 10))
+        && (!('mentions' in request.resource.data) || (request.resource.data.mentions is list
+          && request.resource.data.mentions.size() > 0 && request.resource.data.mentions.size() <= 10))
+        && request.resource.data.text is string && request.resource.data.text.size() <= 20000
+        && (request.resource.data.text.size() > 0 || 'attachments' in request.resource.data)
         && request.resource.data.createdAt == request.time
         && request.resource.data.threadId is string
         && existsAfter(/databases/$(database)/documents/threads/$(request.resource.data.threadId))

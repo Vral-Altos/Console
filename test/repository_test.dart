@@ -34,6 +34,27 @@ void main() {
     expect(thread.keys.toSet(), {'agent', 'title', 'createdAt', 'updatedAt', 'closed'});
   });
 
+  test('attachments and mentions go with the message; unwritten mentions are dropped', () async {
+    const file = AttachmentRef(path: 'attachments/abcdefghij0123456789/q3.pdf', name: 'q3.pdf', contentType: 'application/pdf', size: 2048);
+    const plan = MentionRef(kind: MentionKind.thread, id: 't9', label: 'Plan');
+    const roman = MentionRef(kind: MentionKind.agent, id: 'roman', label: 'Roman');
+    final id = await repo.startThread(agent: 'genie', text: '', attachments: const [file]);
+    expect((await db.doc('threads/$id').get()).data()!['title'], 'q3.pdf', reason: 'no text: the file names it');
+    await repo.send(id, 'compare with @Plan', attachments: const [file], mentions: const [plan, roman, plan]);
+    final msgs = (await db.collection('messages').orderBy('text').get()).docs.map((d) => d.data()).toList();
+    expect(msgs[0]['attachments'], [
+      {'path': file.path, 'name': 'q3.pdf', 'contentType': 'application/pdf', 'size': 2048},
+    ]);
+    expect(msgs[0].containsKey('mentions'), isFalse);
+    expect(msgs[1]['mentions'], [
+      {'kind': 'thread', 'id': 't9', 'label': 'Plan'},
+    ]);
+    final back = messageFrom('m', msgs[1]);
+    expect(back.attachments.single, file);
+    expect(back.mentions.single, plan);
+    expect(() => repo.send(id, 'x', attachments: List.filled(11, file)), throwsArgumentError);
+  });
+
   test('long first messages make a short title', () async {
     final id = await repo.startThread(agent: 'genie', text: 'x' * 200);
     expect(((await db.doc('threads/$id').get()).data()!['title'] as String).length, 60);

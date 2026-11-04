@@ -39,25 +39,40 @@ class ConsoleRepository {
       .map((s) => [for (final d in s.docs) messageFrom(d.id, d.data())]);
 
   /// Starts a thread with [agent] and queues its first message.
-  Future<String> startThread({required String agent, required String text}) async {
+  Future<String> startThread({
+    required String agent,
+    required String text,
+    List<AttachmentRef> attachments = const [],
+    List<MentionRef> mentions = const [],
+  }) async {
     final ref = _threads.doc();
     final batch = _db.batch()
       ..set(ref, {
         'agent': agent,
-        'title': titleFor(text),
+        'title': titleFor(text.trim().isNotEmpty || attachments.isEmpty ? text : attachments.first.name),
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
         'closed': false,
       })
-      ..set(_messages.doc(), _queued(ref.id, text, 'turn'));
+      ..set(_messages.doc(), _queued(ref.id, text, 'turn', attachments: attachments, mentions: mentions));
     await batch.commit();
     unawaited(_audit('Started a conversation with $agent', {'threadId': ref.id, 'agent': agent}));
     return ref.id;
   }
 
-  Future<void> send(String threadId, String text) async {
-    await _messages.doc().set(_queued(threadId, text, 'turn'));
-    unawaited(_audit('Sent a message', {'threadId': threadId, 'chars': text.length}));
+  Future<void> send(
+    String threadId,
+    String text, {
+    List<AttachmentRef> attachments = const [],
+    List<MentionRef> mentions = const [],
+  }) async {
+    await _messages.doc().set(_queued(threadId, text, 'turn', attachments: attachments, mentions: mentions));
+    unawaited(_audit('Sent a message', {
+      'threadId': threadId,
+      'chars': text.length,
+      if (attachments.isNotEmpty) 'attachments': attachments.length,
+      if (mentions.isNotEmpty) 'mentions': mentions.length,
+    }));
   }
 
   /// Asks the agent to close the task: it writes a journal entry, and the
@@ -67,14 +82,32 @@ class ConsoleRepository {
     unawaited(_audit('Closed a conversation', {'threadId': threadId}));
   }
 
-  Map<String, Object?> _queued(String threadId, String text, String kind) => {
-    'threadId': threadId,
-    'role': 'operator',
-    'kind': kind,
-    'text': text,
-    'status': 'queued',
-    'createdAt': FieldValue.serverTimestamp(),
-  };
+  /// Messages carry at most this many attachments and mentions
+  /// (`firestore.rules`).
+  static const maxAttachments = 10;
+  static const maxMentions = 10;
+
+  Map<String, Object?> _queued(
+    String threadId,
+    String text,
+    String kind, {
+    List<AttachmentRef> attachments = const [],
+    List<MentionRef> mentions = const [],
+  }) {
+    if (attachments.length > maxAttachments) throw ArgumentError('At most $maxAttachments files per message.');
+    // Only mentions still written in the text count.
+    final kept = {for (final m in mentions) if (text.contains(m.token)) '${m.kind.name}:${m.id}': m}.values.take(maxMentions);
+    return {
+      'threadId': threadId,
+      'role': 'operator',
+      'kind': kind,
+      'text': text,
+      'status': 'queued',
+      'createdAt': FieldValue.serverTimestamp(),
+      if (attachments.isNotEmpty) 'attachments': [for (final a in attachments) a.toFirestore()],
+      if (kept.isNotEmpty) 'mentions': [for (final m in kept) m.toFirestore()],
+    };
+  }
 
   Future<void> rename(String threadId, String title) {
     final t = title.replaceAll(RegExp(r'\s+'), ' ').trim();
@@ -353,6 +386,21 @@ ChatMessage messageFrom(String id, Map<String, dynamic> d) => ChatMessage(
   durationMs: _int(d['durationMs']),
   model: d['model'] as String?,
   stopped: d['stopped'] as bool? ?? false,
+  attachments: [
+    for (final a in d['attachments'] as List? ?? const [])
+      if (a is Map && a['path'] is String)
+        AttachmentRef(
+          path: a['path'] as String,
+          name: a['name'] as String? ?? 'file',
+          contentType: a['contentType'] as String?,
+          size: _int(a['size']),
+        ),
+  ],
+  mentions: [
+    for (final m in d['mentions'] as List? ?? const [])
+      if (m is Map && MentionKind.values.asNameMap()[m['kind']] != null && m['id'] is String)
+        MentionRef(kind: MentionKind.values.asNameMap()[m['kind']]!, id: m['id'] as String, label: m['label'] as String? ?? m['id'] as String),
+  ],
 );
 
 Devstation devstationFrom(String id, Map<String, dynamic> d) => Devstation(

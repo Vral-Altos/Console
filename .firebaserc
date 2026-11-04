@@ -1,5 +1,17 @@
 {
   "projects": {
     "default": "vral-altos"
+  },
+  "targets": {
+    "vral-altos": {
+      "storage": {
+        "attachments": ["vral-altos-attachments"]
+      }
+    },
+    "demo-va-console": {
+      "storage": {
+        "attachments": ["vral-altos-attachments"]
+      }
+    }
   }
 }

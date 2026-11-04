@@ -1,12 +1,16 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:va_console/data/attachments.dart';
 import 'package:va_console/data/models.dart';
 import 'package:va_console/data/providers.dart';
 import 'package:va_console/ui/app.dart';
 import 'package:va_console/ui/chat/chat_page.dart';
+import 'package:va_console/ui/chat/composer.dart';
+import 'package:va_console/ui/chat/message_tiles.dart';
 import 'package:va_console/ui/chat/thread_sidebar.dart';
 import 'package:va_console/ui/logs_page.dart';
 import 'package:va_console/ui/overview_page.dart';
@@ -80,6 +84,29 @@ List overridesWith({
     logsProvider.overrideWith((ref, q) => Stream.value(logs.where((l) => q.components.isEmpty || q.components.contains(l.component)).toList())),
     metricsProvider.overrideWith((ref, from) => Stream.value(metrics)),
   ];
+}
+
+/// Test-mode attachments: uploads complete when [release] is called.
+class MemoryStore implements AttachmentStore {
+  final uploads = <String, Uint8List>{};
+  final discarded = <String>[];
+  Completer<void> gate = Completer<void>()..complete();
+  var _n = 0;
+
+  @override
+  Future<AttachmentRef> upload(PickedFile file, {void Function(double progress)? onProgress}) async {
+    onProgress?.call(.5);
+    await gate.future;
+    final path = 'attachments/upload${_n++}/${file.name}';
+    uploads[path] = file.bytes;
+    return AttachmentRef(path: path, name: file.name, contentType: contentTypeFor(file.name, file.contentType), size: file.size);
+  }
+
+  @override
+  Future<Uint8List?> read(AttachmentRef ref) async => uploads[ref.path];
+
+  @override
+  Future<void> discard(AttachmentRef ref) async => discarded.add(ref.path);
 }
 
 void main() {
@@ -360,4 +387,214 @@ void main() {
     expect(find.textContaining('You, in the Console'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  group('attachments and mentions', () {
+    final threads = [
+      ChatThread(id: 't1', agent: 'genie', title: 'Current', updatedAt: now),
+      ChatThread(id: 't2', agent: 'roman', title: 'Q4 negotiation plan', updatedAt: now),
+      const ChatThread(id: 't3', agent: 'genie', title: 'Old stuff', archived: true),
+    ];
+    const devstations = [Devstation(id: 'sky', project: 'Skyhorse', state: 'running', desired: 'running')];
+
+    Future<({GlobalKey<ComposerState> key, List<(String, List<AttachmentRef>, List<MentionRef>)> sent})> pumpComposer(
+      WidgetTester tester,
+      MemoryStore store,
+    ) async {
+      size(tester, const Size(1000, 900));
+      final key = GlobalKey<ComposerState>();
+      final sent = <(String, List<AttachmentRef>, List<MentionRef>)>[];
+      await tester.pumpWidget(host(
+        Column(children: [
+          const Spacer(),
+          Composer(
+            key: key,
+            draftKey: 't1',
+            threadId: 't1',
+            hint: 'Reply…',
+            onSend: (t, a, m) async => sent.add((t, a, m)),
+          ),
+        ]),
+        [
+          ...overridesWith(threads: threads, devstations: devstations),
+          attachmentStoreProvider.overrideWithValue(store),
+        ],
+      ));
+      await tester.pump();
+      await tester.pump();
+      return (key: key, sent: sent);
+    }
+
+    testWidgets('files upload at once; send waits for them and carries them', (tester) async {
+      final store = MemoryStore()..gate = Completer<void>();
+      final c = await pumpComposer(tester, store);
+      c.key.currentState!.add([
+        PickedFile(name: 'chart.png', bytes: Uint8List.fromList(List.filled(10, 1))),
+        PickedFile(name: 'q3.pdf', bytes: Uint8List(2048)),
+        PickedFile(name: 'empty.txt', bytes: Uint8List(0)),
+      ]);
+      await tester.pump();
+      expect(find.text('chart.png'), findsOneWidget);
+      expect(find.text('2 KB · 50%'), findsOneWidget, reason: 'progress while uploading');
+      expect(find.text('empty.txt is empty.'), findsOneWidget);
+      await tester.enterText(find.byType(TextField), 'what do these show?');
+      await tester.pump();
+      expect(find.byTooltip('Waiting for uploads…'), findsOneWidget);
+      await tester.testTextInput.receiveAction(TextInputAction.newline);
+      expect(c.sent, isEmpty);
+
+      store.gate.complete();
+      await tester.pump();
+      await tester.pump();
+      await tester.tap(find.byTooltip('Send'));
+      await tester.pump();
+      expect(c.sent.single.$1, 'what do these show?');
+      expect([for (final a in c.sent.single.$2) a.name], ['chart.png', 'q3.pdf']);
+      expect(c.sent.single.$2.last.contentType, 'application/pdf');
+      expect(find.text('chart.png'), findsNothing, reason: 'cleared once sent');
+      expect(store.discarded, isEmpty, reason: 'sent files stay');
+    });
+
+    testWidgets('a file can be sent without text, and a removed one is discarded', (tester) async {
+      final store = MemoryStore();
+      final c = await pumpComposer(tester, store);
+      c.key.currentState!.add([
+        PickedFile(name: 'a.csv', bytes: Uint8List(5)),
+        PickedFile(name: 'b.csv', bytes: Uint8List(5)),
+      ]);
+      await tester.pump();
+      await tester.pump();
+      await tester.tap(find.byTooltip('Remove b.csv'));
+      await tester.pump();
+      expect(store.discarded.single, endsWith('b.csv'));
+      await tester.tap(find.byTooltip('Send'));
+      await tester.pump();
+      expect(c.sent.single.$1, '');
+      expect(c.sent.single.$2.single.name, 'a.csv');
+    });
+
+    testWidgets('limits: ten files, 25 MB each', (tester) async {
+      final store = MemoryStore();
+      final c = await pumpComposer(tester, store);
+      c.key.currentState!.add([
+        PickedFile(name: 'huge.mov', bytes: Uint8List(AttachmentLimits.maxBytes + 1)),
+        for (var i = 0; i < 11; i++) PickedFile(name: 'f$i.txt', bytes: Uint8List(1)),
+      ]);
+      await tester.pump();
+      expect(find.textContaining('At most 10 files per message.'), findsOneWidget);
+      expect(find.textContaining('huge.mov is over 25 MB.'), findsOneWidget);
+      expect(store.uploads.length + 0, lessThanOrEqualTo(10));
+    });
+
+    testWidgets('@ suggests conversations, projects and agents; picking one mentions it', (tester) async {
+      final c = await pumpComposer(tester, MemoryStore());
+      await tester.enterText(find.byType(TextField), 'compare with @');
+      await tester.pump();
+      expect(find.text('Conversations'), findsOneWidget);
+      expect(find.text('Q4 negotiation plan'), findsOneWidget);
+      expect(find.text('Current'), findsNothing, reason: 'not the conversation itself');
+      expect(find.text('Old stuff'), findsNothing, reason: 'not archived ones');
+      expect(find.text('Skyhorse'), findsOneWidget);
+      expect(find.text('Genie'), findsOneWidget);
+
+      await tester.enterText(find.byType(TextField), 'compare with @neg');
+      await tester.pump();
+      expect(find.text('Skyhorse'), findsNothing);
+      await tester.tap(find.text('Q4 negotiation plan'));
+      await tester.pump();
+      final field = tester.widget<TextField>(find.byType(TextField));
+      expect(field.controller!.text, 'compare with @Q4 negotiation plan ');
+
+      // Keyboard: arrows and Enter pick; Escape closes.
+      await tester.enterText(find.byType(TextField), '${field.controller!.text}and @sky');
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+      expect(field.controller!.text, 'compare with @Q4 negotiation plan and @Skyhorse ');
+      await tester.enterText(find.byType(TextField), '${field.controller!.text}ask @');
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump();
+      expect(find.text('Agents'), findsNothing);
+      await tester.enterText(find.byType(TextField), '${field.controller!.text}x');
+      await tester.pump();
+      expect(find.text('Agents'), findsNothing, reason: 'dismissed until a new @');
+      final typed = field.controller!.text;
+      await tester.enterText(find.byType(TextField), typed.substring(0, typed.length - 2));
+      await tester.pump();
+      await tester.enterText(find.byType(TextField), '${field.controller!.text}@fin');
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+
+      await tester.tap(find.byTooltip('Send'));
+      await tester.pump();
+      expect(c.sent.single.$1, 'compare with @Q4 negotiation plan and @Skyhorse ask @Financier');
+      expect(c.sent.single.$3, const [
+        MentionRef(kind: MentionKind.thread, id: 't2', label: 'Q4 negotiation plan'),
+        MentionRef(kind: MentionKind.project, id: 'sky', label: 'Skyhorse'),
+        MentionRef(kind: MentionKind.agent, id: 'financier', label: 'Financier'),
+      ]);
+    });
+
+    testWidgets('a mention deleted from the text is not sent', (tester) async {
+      final c = await pumpComposer(tester, MemoryStore());
+      await tester.enterText(find.byType(TextField), '@Sky');
+      await tester.pump();
+      await tester.tap(find.text('Skyhorse'));
+      await tester.pump();
+      await tester.enterText(find.byType(TextField), 'never mind');
+      await tester.pump();
+      await tester.tap(find.byTooltip('Send'));
+      await tester.pump();
+      expect(c.sent.single.$3, isEmpty);
+    });
+
+    testWidgets('sent messages show their files, images and highlighted mentions; edit restores them', (tester) async {
+      size(tester, const Size(1300, 1400));
+      final store = MemoryStore();
+      store.uploads['attachments/x/shot.png'] = Uint8List.fromList(_png);
+      const shot = AttachmentRef(path: 'attachments/x/shot.png', name: 'shot.png', contentType: 'image/png', size: 67);
+      const pdf = AttachmentRef(path: 'attachments/y/q3.pdf', name: 'q3.pdf', contentType: 'application/pdf', size: 2048);
+      const plan = MentionRef(kind: MentionKind.thread, id: 't2', label: 'Plan');
+      final messages = [
+        ChatMessage(
+          id: '1', threadId: 't1', fromOperator: true, text: 'see @Plan', status: MessageStatus.done, createdAt: now,
+          attachments: const [shot, pdf], mentions: const [plan],
+        ),
+        ChatMessage(id: '2', threadId: 't1', fromOperator: false, text: 'Seen.', createdAt: now),
+        ChatMessage(id: '3', threadId: 't1', fromOperator: true, text: '', status: MessageStatus.done, createdAt: now, attachments: const [pdf]),
+      ];
+      await tester.pumpWidget(host(const ConversationView(threadId: 't1'), [
+        ...overridesWith(threads: threads),
+        attachmentStoreProvider.overrideWithValue(store),
+        messagesProvider('t1').overrideWith((ref) => Stream.value(messages)),
+      ]));
+      await tester.pump();
+      await tester.pump();
+      expect(find.bySemanticsLabel('Image shot.png'), findsOneWidget);
+      expect(find.text('q3.pdf'), findsNWidgets(2));
+      expect(find.text('2 KB'), findsNWidgets(2));
+      final rich = tester.widgetList<RichText>(find.byType(RichText)).firstWhere((r) => r.text.toPlainText() == 'see @Plan');
+      final spans = <TextSpan>[];
+      rich.text.visitChildren((s) {
+        if (s is TextSpan && s.text == '@Plan') spans.add(s);
+        return true;
+      });
+      expect(spans.single.style?.fontWeight, FontWeight.w600, reason: 'the mention is highlighted');
+
+      final bubble = find.ancestor(of: find.text('see @Plan', findRichText: true), matching: find.byType(OperatorBubble));
+      await tester.tap(find.descendant(of: bubble, matching: find.byTooltip('Edit and resend')));
+      await tester.pump();
+      final field = tester.widget<TextField>(find.byType(TextField));
+      expect(field.controller!.text, 'see @Plan');
+      expect(find.byTooltip('Remove shot.png'), findsOneWidget, reason: 'files come back too');
+      expect(tester.takeException(), isNull);
+    });
+  });
 }
+
+/// A 1×1 PNG.
+const _png = [
+  137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 13, 73, 68, 65, 84,
+  120, 156, 99, 248, 207, 192, 240, 31, 0, 5, 0, 1, 255, 137, 153, 61, 29, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130,
+];

@@ -20,6 +20,39 @@ abstract class ChatThread with _$ChatThread {
 
 enum MessageStatus { queued, running, done, failed, cancelled }
 
+/// A file attached to an operator message: an object in the attachments
+/// bucket (`attachments/<upload id>/<name>`).
+@freezed
+abstract class AttachmentRef with _$AttachmentRef {
+  const AttachmentRef._();
+  const factory AttachmentRef({
+    required String path,
+    required String name,
+    String? contentType,
+    int? size,
+  }) = _AttachmentRef;
+
+  bool get isImage => const {'image/png', 'image/jpeg', 'image/gif', 'image/webp'}.contains(contentType);
+
+  Map<String, Object?> toFirestore() => {'path': path, 'name': name, 'contentType': ?contentType, 'size': ?size};
+}
+
+enum MentionKind { thread, project, agent }
+
+/// Something an operator message @mentions: the worker gives the agent its
+/// context (a conversation's messages, a project's Devstation, an agent to
+/// consult).
+@freezed
+abstract class MentionRef with _$MentionRef {
+  const MentionRef._();
+  const factory MentionRef({required MentionKind kind, required String id, required String label}) = _MentionRef;
+
+  /// How it reads in the message text.
+  String get token => '@$label';
+
+  Map<String, Object?> toFirestore() => {'kind': kind.name, 'id': id, 'label': label};
+}
+
 /// One message of a thread (`messages/{id}`).
 @freezed
 abstract class ChatMessage with _$ChatMessage {
@@ -53,6 +86,10 @@ abstract class ChatMessage with _$ChatMessage {
 
     /// The operator stopped the turn; this is what it had written.
     @Default(false) bool stopped,
+
+    /// Operator messages: files and @mentions sent with the text.
+    @Default(<AttachmentRef>[]) List<AttachmentRef> attachments,
+    @Default(<MentionRef>[]) List<MentionRef> mentions,
   }) = _ChatMessage;
 }
 

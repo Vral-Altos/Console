@@ -8,6 +8,7 @@ import '../../data/models.dart';
 import '../../data/providers.dart';
 import '../theme.dart';
 import '../widgets.dart';
+import 'attachment_views.dart';
 import 'markdown_view.dart';
 
 const _column = 760.0;
@@ -95,7 +96,7 @@ class _ActionIconState extends State<_ActionIcon> {
 class OperatorBubble extends StatelessWidget {
   const OperatorBubble({super.key, required this.message, this.onEdit});
   final ChatMessage message;
-  final void Function(String text)? onEdit;
+  final void Function(ChatMessage message)? onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -108,19 +109,25 @@ class OperatorBubble extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  const SizedBox(width: 56),
-                  Flexible(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-                      decoration: BoxDecoration(color: t.userBubble, borderRadius: BorderRadius.circular(18)),
-                      child: Text(message.text, style: text.bodyLarge),
+              if (message.attachments.isNotEmpty)
+                Padding(
+                  padding: EdgeInsets.only(left: 56, bottom: message.text.isEmpty ? 0 : 6),
+                  child: MessageAttachments(attachments: message.attachments),
+                ),
+              if (message.text.isNotEmpty)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    const SizedBox(width: 56),
+                    Flexible(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+                        decoration: BoxDecoration(color: t.userBubble, borderRadius: BorderRadius.circular(18)),
+                        child: Text.rich(mentionSpan(context, message.text, message.mentions, text.bodyLarge)),
+                      ),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
               AnimatedOpacity(
                 duration: const Duration(milliseconds: 120),
                 opacity: hover ? 1 : 0,
@@ -140,7 +147,7 @@ class OperatorBubble extends StatelessWidget {
                       onPressed: () => Clipboard.setData(ClipboardData(text: message.text)),
                     ),
                     if (onEdit != null)
-                      _ActionIcon(icon: Icons.edit_outlined, tooltip: 'Edit and resend', onPressed: () => onEdit!(message.text)),
+                      _ActionIcon(icon: Icons.edit_outlined, tooltip: 'Edit and resend', onPressed: () => onEdit!(message)),
                   ],
                 ),
               ),

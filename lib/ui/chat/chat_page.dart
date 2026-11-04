@@ -103,7 +103,7 @@ class ConversationView extends ConsumerStatefulWidget {
 
 class _ConversationViewState extends ConsumerState<ConversationView> {
   final _scroll = ScrollController();
-  final _input = TextEditingController();
+  final _composer = GlobalKey<ComposerState>();
   bool _showJump = false;
 
   @override
@@ -118,14 +118,13 @@ class _ConversationViewState extends ConsumerState<ConversationView> {
   @override
   void dispose() {
     _scroll.dispose();
-    _input.dispose();
     super.dispose();
   }
 
   void _toBottom() => _scroll.animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeOutCubic);
 
-  Future<void> _send(String text) async {
-    await ref.read(repositoryProvider)!.send(widget.threadId, text);
+  Future<void> _send(String text, List<AttachmentRef> attachments, List<MentionRef> mentions) async {
+    await ref.read(repositoryProvider)!.send(widget.threadId, text, attachments: attachments, mentions: mentions);
     if (_scroll.hasClients) _toBottom();
   }
 
@@ -146,10 +145,8 @@ class _ConversationViewState extends ConsumerState<ConversationView> {
     final description = ref.watch(agentsProvider).where((a) => a.name == agent).firstOrNull?.description;
 
     Future<void> stop(ChatMessage m) => guarded(context, () => repo!.stop(m.id));
-    void retry(String t) => guarded(context, () => _send(t));
-    void edit(String t) => _input
-      ..text = t
-      ..selection = TextSelection.collapsed(offset: t.length);
+    void retry(ChatMessage m) => guarded(context, () => _send(m.text, m.attachments, m.mentions));
+    void edit(ChatMessage m) => _composer.currentState?.restore(m.text, attachments: m.attachments, mentions: m.mentions);
 
     final items = _items(context, messages, agent, thread?.closed ?? false, stop: stop, retry: retry, edit: edit);
 
@@ -225,13 +222,14 @@ class _ConversationViewState extends ConsumerState<ConversationView> {
         )
       else
         Composer(
+          key: _composer,
           draftKey: widget.threadId,
-          controller: _input,
+          threadId: widget.threadId,
           hint: 'Reply to ${agentLabel(agent)}…',
           onSend: _send,
           onStop: stopTarget == null ? null : () => stop(stopTarget),
           stopping: stopTarget?.cancelRequested ?? false,
-          footnote: 'Agents can make mistakes. Enter sends · Shift+Enter for a new line',
+          footnote: 'Agents can make mistakes. Enter sends · Shift+Enter for a new line · @ mentions · paste or drop files',
         ),
     ]);
   }
@@ -242,8 +240,8 @@ class _ConversationViewState extends ConsumerState<ConversationView> {
     String agent,
     bool closed, {
     required void Function(ChatMessage) stop,
-    required void Function(String) retry,
-    required void Function(String) edit,
+    required void Function(ChatMessage) retry,
+    required void Function(ChatMessage) edit,
   }) {
     final now = DateTime.now();
     final out = <Widget>[];
@@ -272,7 +270,7 @@ class _ConversationViewState extends ConsumerState<ConversationView> {
           case MessageStatus.queued || MessageStatus.running:
             out.add(PendingReply(message: m, agent: agent, onStop: () => stop(m)));
           case MessageStatus.failed:
-            out.add(FailedNote(message: m, onRetry: closed ? null : () => retry(m.text)));
+            out.add(FailedNote(message: m, onRetry: closed ? null : () => retry(m)));
           case MessageStatus.cancelled:
             final next = i + 1 < messages.length ? messages[i + 1] : null;
             if (next == null || next.fromOperator || !next.stopped) {
@@ -285,7 +283,7 @@ class _ConversationViewState extends ConsumerState<ConversationView> {
         out.add(AgentReply(
           message: m,
           agent: agent,
-          onRetry: i == lastAgent && !closed && prompt.fromOperator ? () => retry(prompt.text) : null,
+          onRetry: i == lastAgent && !closed && prompt.fromOperator ? () => retry(prompt) : null,
         ));
       }
     }
@@ -368,12 +366,12 @@ class NewChatView extends ConsumerWidget {
         draftKey: 'new',
         hint: 'Message ${agentLabel(agent)}…',
         autofocus: !narrow,
-        onSend: (text) async {
-          final id = await ref.read(repositoryProvider)!.startThread(agent: agent, text: text);
+        onSend: (text, attachments, mentions) async {
+          final id = await ref.read(repositoryProvider)!.startThread(agent: agent, text: text, attachments: attachments, mentions: mentions);
           ref.read(selectedThreadProvider.notifier).select(id);
         },
         leading: _AgentMenu(selected: agent, agents: [for (final a in agents) a.name]),
-        footnote: 'Enter sends · Shift+Enter for a new line',
+        footnote: 'Enter sends · Shift+Enter for a new line · @ mentions · paste or drop files',
       ),
     ]);
   }

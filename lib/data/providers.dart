@@ -1,8 +1,11 @@
+import 'dart:typed_data';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'attachments.dart';
 import 'console_repository.dart';
 import 'models.dart';
 import 'telemetry.dart';
@@ -10,6 +13,15 @@ import 'telemetry.dart';
 /// Overridden in main() with the initialised services (null: not configured).
 final firebaseAuthProvider = Provider<FirebaseAuth?>((ref) => null);
 final firestoreProvider = Provider<FirebaseFirestore?>((ref) => null);
+
+/// Chat attachments' storage (null: not configured).
+final attachmentStoreProvider = Provider<AttachmentStore?>((ref) => null);
+
+/// An attachment's bytes, for previews and downloads (kept while shown).
+final attachmentBytesProvider = FutureProvider.autoDispose.family<Uint8List?, AttachmentRef>((ref, a) async {
+  final store = ref.watch(attachmentStoreProvider);
+  return store?.read(a);
+});
 
 final authStateProvider = StreamProvider<User?>((ref) {
   final auth = ref.watch(firebaseAuthProvider);

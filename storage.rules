@@ -1,0 +1,32 @@
+rules_version = '2';
+
+// Chat attachments (bucket vral-altos-attachments, infra/attachments.tf):
+// only the operator's verified Google account (as in firestore.rules) may
+// upload, read or remove them. Each upload lands at
+// attachments/<random upload id>/<file name> (so none overwrites another),
+// 25 MB at most. The workers
+// read with their own IAM identities, outside these rules.
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isOwner() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email == 'siddharth.chitikela@gmail.com';
+    }
+
+    match /attachments/{uploadId}/{name} {
+      allow read: if isOwner();
+      allow create: if isOwner()
+        && uploadId.matches('^[A-Za-z0-9]{20}$')
+        && name.size() <= 140
+        && request.resource.size > 0
+        && request.resource.size <= 25 * 1024 * 1024;
+      allow update: if false;
+      allow delete: if isOwner();
+    }
+
+    match /{everything=**} {
+      allow read, write: if false;
+    }
+  }
+}

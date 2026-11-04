@@ -10,6 +10,7 @@ dependencies:
   cloud_firestore: ^6.7.1
   firebase_auth: ^6.4.0
   firebase_core: ^4.12.1
+  firebase_storage: ^13.6.1
   flutter:
     sdk: flutter
   flutter_markdown_plus: ^1.0.12
@@ -19,6 +20,7 @@ dependencies:
   json_annotation: ^4.9.0
   markdown: ^7.3.1
   url_launcher: ^6.3.3
+  web: ^1.1.1
 
 dev_dependencies:
   flutter_test:

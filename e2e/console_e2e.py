@@ -1,7 +1,8 @@
 """Console E2E on emulators with a real Mac worker (README, "End-to-end test"):
 sign-in gate, Overview live data, a chat that streams and finishes, stopping a
-turn, rename / pin, Projects and System, phone layout, both themes."""
-import re, sys
+turn, rename / pin, attachments (picked and dropped) and @mentions read by
+the agent, Projects and System, phone layout, both themes."""
+import re, struct, sys, zlib
 from playwright.sync_api import sync_playwright, expect
 
 URL = 'http://localhost:5055/'
@@ -39,6 +40,22 @@ def type_and_send(page, box_name, text):
     page.keyboard.type(text)
     expect(box).to_have_value(text)
     page.keyboard.press('Enter')  # Enter sends
+
+def red_png(path, w=48, h=32):
+    """A plain red image, for the agent to name its colour."""
+    row = b'\x00' + b'\xd0\x10\x10' * w
+    def chunk(t, d): return struct.pack('>I', len(d)) + t + d + struct.pack('>I', zlib.crc32(t + d) & 0xffffffff)
+    data = b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', w, h, 8, 2, 0, 0, 0)) \
+        + chunk(b'IDAT', zlib.compress(row * h)) + chunk(b'IEND', b'')
+    open(path, 'wb').write(data)
+
+DROP_JS = """([name, text]) => {
+  const dt = new DataTransfer();
+  dt.items.add(new File([text], name, {type: 'text/plain'}));
+  for (const type of ['dragenter', 'dragover', 'drop']) {
+    window.dispatchEvent(new DragEvent(type, {dataTransfer: dt, bubbles: true, cancelable: true}));
+  }
+}"""
 
 with sync_playwright() as pw:
     b = pw.chromium.launch()
@@ -99,6 +116,46 @@ with sync_playwright() as pw:
     expect(seen(page, re.compile('^Pinned$'))).to_be_visible(timeout=20000)
     page.screenshot(path=f'{OUT}/6-renamed-pinned.png')
     print('rename and pin: ok')
+
+    # 5b. Files and @mentions: a picked image and text file, a dropped file
+    # (removed again), and a mention of an earlier conversation; the agent
+    # reads all of them.
+    red_png(f'{OUT}/swatch.png')
+    open(f'{OUT}/note.txt', 'w').write('The secret word is MARMALADE.\n')
+    page.get_by_role('button', name='New chat').click()
+    page.get_by_role('button', name=re.compile('Agent Genie')).click()
+    type_and_send(page, re.compile('Message Genie'),
+                  'E2E memo thread, nothing important here at all, just a filler line. Codeword: PELICAN. Reply OK.')
+    expect(seen(page, re.compile(r'(PM|AM|\d) · Mac · '))).to_be_visible(timeout=240000)
+    page.get_by_role('button', name='New chat').click()
+    page.get_by_role('button', name=re.compile('Agent Genie')).click()
+    with page.expect_file_chooser() as fc:
+        page.get_by_role('button', name='Attach files').click()
+    fc.value.set_files([f'{OUT}/swatch.png', f'{OUT}/note.txt'])
+    expect(seen(page, 'Attachment swatch.png')).to_be_visible(timeout=20000)
+    expect(seen(page, 'Attachment note.txt')).to_be_visible()
+    page.evaluate(DROP_JS, ['dropped.txt', 'dropped'])
+    expect(seen(page, 'Attachment dropped.txt')).to_be_visible(timeout=20000)
+    page.wait_for_timeout(1500)  # uploads finish
+    page.get_by_role('button', name='Remove dropped.txt').click()
+    expect(seen(page, 'Attachment dropped.txt')).to_have_count(0)
+    box = page.get_by_role('textbox', name=re.compile('Message Genie'))
+    box.click(); page.wait_for_timeout(300)
+    page.keyboard.type('In @memo')
+    expect(page.get_by_role('button', name=re.compile('^Mention E2E memo thread')).first).to_be_visible(timeout=10000)
+    page.screenshot(path=f'{OUT}/6a-mention-menu.png')
+    page.keyboard.press('Enter')  # picks the highlighted conversation
+    page.keyboard.type('what was the codeword? Also: the secret word in note.txt, and the colour of the image. '
+                       'Reply exactly as: codeword, word, colour.')
+    page.screenshot(path=f'{OUT}/6b-composer-files.png')
+    page.keyboard.press('Enter')
+    expect(page.get_by_role('button', name='Image swatch.png')).to_be_visible(timeout=30000)
+    expect(page.get_by_role('button', name=re.compile('^Attachment note.txt'))).to_be_visible()
+    # The reply names all three: the mentioned conversation's codeword, the
+    # text file's word and the image's colour.
+    expect(seen(page, re.compile(r'PELICAN.*MARMALADE.*\bred\b', re.I | re.S))).to_be_visible(timeout=240000)
+    page.screenshot(path=f'{OUT}/6c-files-answered.png')
+    print('attachments and mentions: ok')
 
     # 6. The turns are counted; Projects and System render live data.
     tab(page, 'Overview')

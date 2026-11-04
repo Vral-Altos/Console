@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'data/attachments.dart';
 import 'data/console_repository.dart';
 import 'data/firebase.dart';
 import 'data/telemetry.dart';
@@ -17,6 +18,7 @@ Future<void> main() async {
       overrides: [
         firebaseAuthProvider.overrideWithValue(firebase?.auth),
         firestoreProvider.overrideWithValue(firebase?.db),
+        attachmentStoreProvider.overrideWithValue(firebase == null ? null : FirebaseAttachmentStore(firebase.storage)),
       ],
       child: const ConsoleApp(),
     ),

@@ -149,6 +149,19 @@ describe('messages', () => {
     await assertFails(setDoc(doc(owner(), 'messages/f'), message({ text: 'x'.repeat(20001) })));
   });
 
+  test('messages carry attachments and mentions; with files the text may be empty', async () => {
+    const file = { path: 'attachments/abcdefghij0123456789/a.png', name: 'a.png', contentType: 'image/png', size: 10 };
+    const mention = { kind: 'thread', id: 't2', label: 'Plan' };
+    await assertSucceeds(setDoc(doc(owner(), 'messages/a'), message({ attachments: [file], mentions: [mention] })));
+    await assertSucceeds(setDoc(doc(owner(), 'messages/b'), message({ text: '', attachments: [file] })));
+    await assertFails(setDoc(doc(owner(), 'messages/c'), message({ text: '', mentions: [mention] })));
+    await assertFails(setDoc(doc(owner(), 'messages/d'), message({ attachments: Array(11).fill(file) })));
+    await assertFails(setDoc(doc(owner(), 'messages/e'), message({ mentions: Array(11).fill(mention) })));
+    await assertFails(setDoc(doc(owner(), 'messages/f'), message({ attachments: file })));
+    await assertFails(setDoc(doc(owner(), 'messages/g'), message({ attachments: [] })));
+    await assertFails(setDoc(doc(stranger(), 'messages/h'), message({ attachments: [file] })));
+  });
+
   test('messages need an open thread', async () => {
     await assertFails(setDoc(doc(owner(), 'messages/a'), message({ threadId: 'missing' })));
     await assertFails(setDoc(doc(owner(), 'messages/b'), message({ threadId: 'closed' })));
