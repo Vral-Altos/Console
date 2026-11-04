@@ -13,13 +13,14 @@ const port = Number.parseInt(process.env.FIRESTORE_EMULATOR_PORT ?? '8086', 10);
 let env;
 
 const owner = () => env.authenticatedContext('owner', {
-  email: 'obsidian.infinitum@gmail.com', email_verified: true,
-}).firestore();
-const secondOwner = () => env.authenticatedContext('owner2', {
   email: 'siddharth.chitikela@gmail.com', email_verified: true,
 }).firestore();
+// The operator's other Google account is deliberately not admitted.
+const otherAccount = () => env.authenticatedContext('other', {
+  email: 'obsidian.infinitum@gmail.com', email_verified: true,
+}).firestore();
 const unverified = () => env.authenticatedContext('u', {
-  email: 'obsidian.infinitum@gmail.com', email_verified: false,
+  email: 'siddharth.chitikela@gmail.com', email_verified: false,
 }).firestore();
 const stranger = () => env.authenticatedContext('s', {
   email: 'someone@example.com', email_verified: true,
@@ -62,16 +63,15 @@ beforeEach(async () => {
 describe('reads', () => {
   const readable = ['threads/t1', 'messages/m1', 'status/mac', 'agent_mesh/state', 'autobench/latest', 'devstations/d1'];
 
-  test('both operator accounts read the Console data', async () => {
+  test('the operator reads the Console data', async () => {
     for (const path of readable) {
       await assertSucceeds(getDoc(doc(owner(), path)));
-      await assertSucceeds(getDoc(doc(secondOwner(), path)));
     }
     await assertSucceeds(getDocs(collection(owner(), 'threads')));
   });
 
   test('nobody else reads anything', async () => {
-    for (const db of [anonymous(), stranger(), unverified()]) {
+    for (const db of [anonymous(), stranger(), unverified(), otherAccount()]) {
       for (const path of readable) await assertFails(getDoc(doc(db, path)));
       await assertFails(getDocs(collection(db, 'messages')));
     }

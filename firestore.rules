@@ -3,7 +3,7 @@ rules_version = '2';
 // Client rules for the Vral Altos *platform* database (deployed from
 // apps/console). Agents, the Mac worker, the cloud runner and Autobench use
 // IAM and are not subject to these rules. Clients get:
-// - the operator only (verified Google accounts below), nobody else;
+// - the operator only (the verified Google account below), nobody else;
 // - read access to the Console's data and the status the system reports;
 // - write access only to start threads and queue operator messages.
 service cloud.firestore {
@@ -11,10 +11,7 @@ service cloud.firestore {
     function isOwner() {
       return request.auth != null
         && request.auth.token.email_verified == true
-        && request.auth.token.email in [
-          'obsidian.infinitum@gmail.com',
-          'siddharth.chitikela@gmail.com'
-        ];
+        && request.auth.token.email == 'siddharth.chitikela@gmail.com';
     }
 
     function isShortString(v, max) {

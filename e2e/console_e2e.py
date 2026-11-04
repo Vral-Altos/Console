@@ -29,7 +29,7 @@ with sync_playwright() as pw:
 
     # 1. A stranger is refused.
     page.goto(URL); enable_semantics(page)
-    sign_in(page, 'stranger@example.com')
+    sign_in(page, 'obsidian.infinitum@gmail.com')  # the operator's other account: not admitted
     expect(page.get_by_text('Not authorised')).to_be_visible(timeout=20000)
     page.screenshot(path=f'{OUT}/1-stranger.png')
     page.get_by_role('button', name='Sign out').click()
@@ -37,7 +37,7 @@ with sync_playwright() as pw:
     print('stranger refused: ok')
 
     # 2. The operator gets in and chats with Genie through the Mac worker.
-    sign_in(page, 'obsidian.infinitum@gmail.com')
+    sign_in(page, 'siddharth.chitikela@gmail.com')
     expect(page.get_by_role('button', name='New conversation')).to_be_visible(timeout=20000)
     expect(page.get_by_role('checkbox', name='Mac')).to_be_visible(timeout=20000)
     box = page.get_by_role('textbox', name='Message genie')

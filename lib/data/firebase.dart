@@ -8,9 +8,9 @@ typedef FirebaseServices = ({FirebaseAuth auth, FirebaseFirestore db});
 /// The platform database (the `(default)` one is Financier's).
 const platformDatabase = 'platform';
 
-/// The operator's Google accounts: the only ones the Console (and the
-/// platform database's rules, `firestore.rules`) let in.
-const ownerEmails = {'obsidian.infinitum@gmail.com', 'siddharth.chitikela@gmail.com'};
+/// The operator's Google account: the only one the Console (and the
+/// platform database's rules, `firestore.rules`) lets in.
+const ownerEmails = {'siddharth.chitikela@gmail.com'};
 
 /// Connects to Firebase from compile-time values (`--dart-define-from-file=.env`).
 /// Debug builds (and USE_EMULATORS builds) use the local emulators only;

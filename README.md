@@ -10,7 +10,7 @@ site `va-console` in `vral-altos`): **https://va-console.web.app**.
 - **Maintenance** — where agents run, Claude accounts and usage, active agent
   sessions, tool syncs.
 
-Only the operator's verified Google accounts get in (`lib/data/firebase.dart`
+Only the operator's verified Google account (siddharth.chitikela@) gets in (`lib/data/firebase.dart`
 and `firestore.rules`, which must list the same accounts).
 
 ## Develop
