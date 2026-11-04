@@ -10,10 +10,12 @@ site `va-console` in `vral-altos`): **https://va-console.web.app**.
   mailbox; the Mac worker (or the cloud runner, or a director's Devstation)
   answers, streaming its progress; Stop ends a turn and keeps what it wrote.
 - **Projects** — Devstations (GCE dev VMs with Claude Code) and the Factory.
+- **Logs** — Logs Explorer, Monitoring and Activity over every service's
+  telemetry (`docs/architecture.md`, Telemetry) and your own audit trail.
 - **System** — approvals, hosts, agent sessions, usage by host/account, syncs,
   appearance.
 
-Shortcuts: Ctrl/⌘+K new chat, Ctrl/⌘+1…4 pages; Enter sends, Shift+Enter
+Shortcuts: Ctrl/⌘+K new chat, Ctrl/⌘+1…5 pages; Enter sends, Shift+Enter
 breaks the line.
 
 Only the operator's verified Google account (siddharth.chitikela@) gets in (`lib/data/firebase.dart`
