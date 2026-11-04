@@ -118,9 +118,8 @@ class _NewThreadViewState extends ConsumerState<NewThreadView> {
 
   @override
   Widget build(BuildContext context) {
-    final mac = ref.watch(macStatusProvider).value;
-    final cloud = ref.watch(cloudStatusProvider).value;
-    final agents = {'genie', ...?mac?.agents, ...?cloud?.agents}.toList()..sort();
+    final hosts = ref.watch(allStatusProvider).value ?? const {};
+    final agents = {'genie', for (final h in hosts.values) ...h.agents}.toList()..sort();
     return Column(children: [
       Expanded(
         child: Center(

@@ -57,6 +57,9 @@ beforeEach(async () => {
     await setDoc(doc(db, 'autobench/latest/days/2026-11-04'), { nav: 1 });
     await setDoc(doc(db, 'devstations/d1'), { project: 'p' });
     await setDoc(doc(db, 'secrets/x'), { v: 1 });
+    await setDoc(doc(db, 'approvals/a1'), { requestedBy: 'director-x', action: 'spend', status: 'pending' });
+    await setDoc(doc(db, 'approvals/done'), { requestedBy: 'director-x', action: 'spend', status: 'approved' });
+    await setDoc(doc(db, 'factory_requests/r1'), { action: 'stop', devstationId: 'ds', status: 'done' });
   });
 });
 
@@ -141,5 +144,53 @@ describe('messages', () => {
     await assertFails(setDoc(doc(owner(), 'agent_mesh/state'), { json: '{}' }));
     await assertFails(setDoc(doc(owner(), 'autobench/latest'), { nav: 0 }));
     await assertFails(setDoc(doc(owner(), 'devstations/d2'), { project: 'p' }));
+  });
+});
+
+describe('factory', () => {
+  const create = (extra = {}) => ({
+    action: 'create', devstationId: 'atlas', project: 'Atlas', machineType: 'e2-standard-2',
+    repoUrl: '', status: 'queued', createdAt: serverTimestamp(), ...extra,
+  });
+
+  test('the operator queues create, start, stop and destroy', async () => {
+    await assertSucceeds(setDoc(doc(owner(), 'factory_requests/a'), create()));
+    for (const action of ['start', 'stop', 'destroy']) {
+      await assertSucceeds(setDoc(doc(owner(), `factory_requests/${action}`),
+        { action, devstationId: 'atlas', status: 'queued', createdAt: serverTimestamp() }));
+    }
+    await assertSucceeds(getDoc(doc(owner(), 'factory_requests/r1')));
+  });
+
+  test('malformed or forged requests are refused', async () => {
+    const bad = [
+      create({ action: 'reboot' }), create({ devstationId: 'Bad_Id' }), create({ status: 'done' }),
+      create({ machineType: 'n2-highmem-96' }), create({ project: "x'; rm -rf /" }),
+      create({ buildId: 'forged' }), create({ createdAt: new Date(0) }),
+    ];
+    for (const [i, b] of bad.entries()) await assertFails(setDoc(doc(owner(), `factory_requests/b${i}`), b));
+    await assertFails(updateDoc(doc(owner(), 'factory_requests/r1'), { status: 'queued' }));
+  });
+
+  test('nobody else touches the Factory', async () => {
+    for (const db of [anonymous(), stranger(), otherAccount()]) {
+      await assertFails(setDoc(doc(db, 'factory_requests/x'), create()));
+      await assertFails(getDoc(doc(db, 'factory_requests/r1')));
+    }
+  });
+});
+
+describe('approvals', () => {
+  test('the operator approves or rejects a pending request', async () => {
+    await assertSucceeds(updateDoc(doc(owner(), 'approvals/a1'), { status: 'approved', decidedAt: serverTimestamp() }));
+  });
+
+  test('decided requests, other fields and other people are refused', async () => {
+    await assertFails(updateDoc(doc(owner(), 'approvals/done'), { status: 'rejected', decidedAt: serverTimestamp() }));
+    await assertFails(updateDoc(doc(owner(), 'approvals/a1'), { action: 'other', status: 'approved', decidedAt: serverTimestamp() }));
+    await assertFails(updateDoc(doc(owner(), 'approvals/a1'), { status: 'maybe', decidedAt: serverTimestamp() }));
+    await assertFails(setDoc(doc(owner(), 'approvals/new'), { requestedBy: 'me', status: 'approved' }));
+    await assertFails(updateDoc(doc(stranger(), 'approvals/a1'), { status: 'approved', decidedAt: serverTimestamp() }));
+    await assertFails(updateDoc(doc(otherAccount(), 'approvals/a1'), { status: 'approved', decidedAt: serverTimestamp() }));
   });
 });

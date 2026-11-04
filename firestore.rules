@@ -61,5 +61,34 @@ service cloud.firestore {
     match /devstations/{id} {
       allow read: if isOwner();
     }
+
+    // The Factory: the Console queues requests; the cloud runner applies them.
+    match /factory_requests/{id} {
+      allow read: if isOwner();
+      allow create: if isOwner()
+        && request.resource.data.keys().hasOnly(
+             ['action', 'devstationId', 'project', 'machineType', 'repoUrl', 'status', 'createdAt'])
+        && request.resource.data.action in ['create', 'start', 'stop', 'destroy']
+        && request.resource.data.devstationId.matches('^[a-z][a-z0-9-]{1,19}$')
+        && request.resource.data.status == 'queued'
+        && request.resource.data.createdAt == request.time
+        && (request.resource.data.action != 'create' || (
+             request.resource.data.project.matches('^[A-Za-z0-9][A-Za-z0-9 ._-]{0,79}$')
+             && request.resource.data.machineType in ['e2-medium', 'e2-standard-2', 'e2-standard-4', 'e2-standard-8']
+             && request.resource.data.repoUrl is string
+             && request.resource.data.repoUrl.size() <= 300));
+      allow update, delete: if false;
+    }
+
+    // Agents' approval requests: the operator only approves or rejects.
+    match /approvals/{id} {
+      allow read: if isOwner();
+      allow update: if isOwner()
+        && resource.data.status == 'pending'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'decidedAt'])
+        && request.resource.data.status in ['approved', 'rejected']
+        && request.resource.data.decidedAt == request.time;
+      allow create, delete: if false;
+    }
   }
 }

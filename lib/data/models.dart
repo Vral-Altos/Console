@@ -48,6 +48,7 @@ abstract class HostStatus with _$HostStatus {
     String? revision,
     DateTime? lastRunAt,
     String? lastResult,
+    String? claudeVersion,
   }) = _HostStatus;
 }
 
@@ -107,8 +108,41 @@ abstract class Devstation with _$Devstation {
     required String id,
     required String project,
     required String state,
+    required String desired,
     String? machineType,
     String? zone,
-    DateTime? lastActiveAt,
+    String? repoUrl,
+    String? instance,
+    String? error,
+    DateTime? updatedAt,
   }) = _Devstation;
+}
+
+/// A Factory request (`factory_requests/{id}`): queued by the Console,
+/// applied by the cloud runner through Cloud Build.
+@freezed
+abstract class FactoryRequest with _$FactoryRequest {
+  const factory FactoryRequest({
+    required String id,
+    required String action,
+    required String devstationId,
+    required String status,
+    DateTime? createdAt,
+    String? error,
+    String? buildId,
+  }) = _FactoryRequest;
+}
+
+/// An agent's request for the operator's approval (`approvals/{id}`).
+@freezed
+abstract class Approval with _$Approval {
+  const factory Approval({
+    required String id,
+    required String requestedBy,
+    required String action,
+    required String details,
+    required String status,
+    DateTime? createdAt,
+    DateTime? decidedAt,
+  }) = _Approval;
 }

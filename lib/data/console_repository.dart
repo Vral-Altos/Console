@@ -84,15 +84,75 @@ class ConsoleRepository {
   Stream<List<Devstation>> devstations() => _db.collection('devstations').snapshots().map(
     (s) => [
       for (final d in s.docs)
-        Devstation(
-          id: d.id,
-          project: d.data()['project'] as String? ?? d.id,
-          state: d.data()['state'] as String? ?? 'unknown',
-          machineType: d.data()['machineType'] as String?,
-          zone: d.data()['zone'] as String?,
-          lastActiveAt: _time(d.data()['lastActiveAt']),
-        ),
-    ],
+        if (d.data()['state'] != 'deleted') devstationFrom(d.id, d.data()),
+    ]..sort((a, b) => a.id.compareTo(b.id)),
+  );
+
+  Stream<List<FactoryRequest>> factoryRequests() => _db
+      .collection('factory_requests')
+      .orderBy('createdAt', descending: true)
+      .limit(20)
+      .snapshots()
+      .map((s) => [
+            for (final d in s.docs)
+              FactoryRequest(
+                id: d.id,
+                action: d.data()['action'] as String? ?? '',
+                devstationId: d.data()['devstationId'] as String? ?? '',
+                status: d.data()['status'] as String? ?? '',
+                createdAt: _time(d.data()['createdAt']),
+                error: d.data()['error'] as String?,
+                buildId: d.data()['buildId'] as String?,
+              ),
+          ]);
+
+  /// Queues a Factory request; the cloud runner applies it.
+  Future<void> requestFactory({
+    required String action,
+    required String devstationId,
+    String? project,
+    String? machineType,
+    String? repoUrl,
+  }) => _db.collection('factory_requests').doc().set({
+    'action': action,
+    'devstationId': devstationId,
+    if (action == 'create') ...{
+      'project': project,
+      'machineType': machineType,
+      'repoUrl': repoUrl ?? '',
+    },
+    'status': 'queued',
+    'createdAt': FieldValue.serverTimestamp(),
+  });
+
+  Stream<List<Approval>> approvals() => _db
+      .collection('approvals')
+      .orderBy('createdAt', descending: true)
+      .limit(30)
+      .snapshots()
+      .map((s) => [
+            for (final d in s.docs)
+              Approval(
+                id: d.id,
+                requestedBy: d.data()['requestedBy'] as String? ?? '',
+                action: d.data()['action'] as String? ?? '',
+                details: d.data()['details'] as String? ?? '',
+                status: d.data()['status'] as String? ?? 'pending',
+                createdAt: _time(d.data()['createdAt']),
+                decidedAt: _time(d.data()['decidedAt']),
+              ),
+          ]);
+
+  Future<void> decide(String approvalId, {required bool approve}) =>
+      _db.doc('approvals/$approvalId').update({
+        'status': approve ? 'approved' : 'rejected',
+        'decidedAt': FieldValue.serverTimestamp(),
+      });
+
+  /// Every host's status (`status/mac`, `status/cloud`,
+  /// `status/devstation-*`), for the agents each one runs.
+  Stream<Map<String, HostStatus>> allStatus() => _db.collection('status').snapshots().map(
+    (s) => {for (final d in s.docs) d.id: hostFrom(d.data())},
   );
 
   static String _title(String text) {
@@ -132,6 +192,19 @@ ChatMessage messageFrom(String id, Map<String, dynamic> d) => ChatMessage(
   accountId: d['accountId'] as String?,
 );
 
+Devstation devstationFrom(String id, Map<String, dynamic> d) => Devstation(
+  id: id,
+  project: d['project'] as String? ?? id,
+  state: d['state'] as String? ?? 'unknown',
+  desired: d['desired'] as String? ?? 'running',
+  machineType: d['machineType'] as String?,
+  zone: d['zone'] as String?,
+  repoUrl: d['repoUrl'] as String?,
+  instance: d['instance'] as String?,
+  error: d['error'] as String?,
+  updatedAt: _time(d['updatedAt']),
+);
+
 HostStatus hostFrom(Map<String, dynamic> d) => HostStatus(
   lastSeen: _time(d['lastSeen']),
   host: d['host'] as String?,
@@ -140,6 +213,7 @@ HostStatus hostFrom(Map<String, dynamic> d) => HostStatus(
   revision: d['revision'] as String?,
   lastRunAt: _time(d['lastRunAt']),
   lastResult: d['lastResult'] as String?,
+  claudeVersion: d['claudeVersion'] as String?,
 );
 
 /// Reads the registry the agent mesh writes (a JSON string field).

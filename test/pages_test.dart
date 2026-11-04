@@ -21,11 +21,16 @@ void main() {
   });
 
   testWidgets('maintenance shows hosts, the empty account pool and syncs', (tester) async {
+    tester.view.physicalSize = const Size(1200, 2400); // the whole page, unscrolled
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     final now = DateTime.now();
     await tester.pumpWidget(host(const MaintenancePage(), [
       macStatusProvider.overrideWith((ref) => Stream.value(HostStatus(lastSeen: now, host: 'air'))),
       cloudStatusProvider.overrideWith((ref) => Stream.value(null)),
       meshProvider.overrideWith((ref) => Stream.value(const MeshView())),
+      approvalsProvider.overrideWith((ref) => Stream.value(const <Approval>[])),
+      clockProvider.overrideWith((ref) => const Stream.empty()),
       portfolioSyncProvider.overrideWith(
           (ref) => Stream.value(PortfolioSync(syncedAt: now, source: 'statement'))),
     ]));
@@ -39,6 +44,9 @@ void main() {
   testWidgets('factory says when there are no Devstations', (tester) async {
     await tester.pumpWidget(host(const FactoryPage(), [
       devstationsProvider.overrideWith((ref) => Stream.value(const <Devstation>[])),
+      factoryRequestsProvider.overrideWith((ref) => Stream.value(const <FactoryRequest>[])),
+      allStatusProvider.overrideWith((ref) => Stream.value(const <String, HostStatus>{})),
+      clockProvider.overrideWith((ref) => const Stream.empty()),
     ]));
     await tester.pump();
     expect(find.textContaining('No Devstations'), findsOneWidget);
@@ -64,5 +72,41 @@ void main() {
     // Closing waits while a message is in flight.
     final close = tester.widget<TextButton>(find.widgetWithText(TextButton, 'Close'));
     expect(close.onPressed, isNull);
+  });
+
+  testWidgets('factory shows each Devstation with its director and controls', (tester) async {
+    await tester.pumpWidget(host(const FactoryPage(), [
+      devstationsProvider.overrideWith((ref) => Stream.value(const [
+            Devstation(id: 'atlas', project: 'Atlas', state: 'running', desired: 'running', machineType: 'e2-standard-2'),
+            Devstation(id: 'nova', project: 'Nova', state: 'stopped', desired: 'stopped'),
+          ])),
+      factoryRequestsProvider.overrideWith((ref) => Stream.value(const [
+            FactoryRequest(id: 'r', action: 'create', devstationId: 'atlas', status: 'done'),
+          ])),
+      allStatusProvider.overrideWith((ref) => Stream.value({
+            'devstation-atlas': HostStatus(lastSeen: DateTime.now(), claudeVersion: '2.1.318 (Claude Code)'),
+          })),
+      clockProvider.overrideWith((ref) => const Stream.empty()),
+    ]));
+    await tester.pump();
+    expect(find.textContaining('director serving'), findsOneWidget);
+    expect(find.textContaining('2.1.318'), findsOneWidget);
+    expect(find.byTooltip('Stop'), findsOneWidget); // atlas is running
+    expect(find.byTooltip('Start'), findsOneWidget); // nova is stopped
+    expect(find.byTooltip('Tear down'), findsNWidgets(2));
+    expect(find.text('create atlas'), findsOneWidget);
+  });
+
+  testWidgets('pending approvals offer approve and reject', (tester) async {
+    await tester.pumpWidget(host(const ApprovalsSection(), [
+      approvalsProvider.overrideWith((ref) => Stream.value(const [
+            Approval(id: 'a', requestedBy: 'director-atlas', action: 'Create Cloud SQL', details: 'S\$10/month', status: 'pending'),
+            Approval(id: 'b', requestedBy: 'rhog', action: 'Old', details: '', status: 'approved'),
+          ])),
+    ]));
+    await tester.pump();
+    expect(find.text('director-atlas: Create Cloud SQL'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Approve'), findsNothing,
+        reason: 'no repository in this test, so no actions');
   });
 }

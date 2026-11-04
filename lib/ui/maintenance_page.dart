@@ -12,10 +12,12 @@ class MaintenancePage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(clockProvider);
     final now = DateTime.now();
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        const ApprovalsSection(),
         Section(
           title: 'Agent hosts',
           child: Column(children: [
@@ -108,6 +110,44 @@ class MaintenancePage extends ConsumerWidget {
       leading: Icon(limited ? Icons.block : Icons.account_circle_outlined),
       title: Text(a.label),
       subtitle: Text('${w('5h', a.fiveHour)} · ${w('7d', a.sevenDay)}${limited ? ' · limited' : ''}'),
+    );
+  }
+}
+
+/// Agents' requests for the operator's approval.
+class ApprovalsSection extends ConsumerWidget {
+  const ApprovalsSection({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final repo = ref.read(repositoryProvider);
+    return Section(
+      title: 'Approvals',
+      child: AsyncView(
+        value: ref.watch(approvalsProvider),
+        data: (list) => list.isEmpty
+            ? const Text('No requests. Agents ask here before spending, deploying or anything irreversible.')
+            : Column(children: [
+                for (final a in list)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(switch (a.status) {
+                      'approved' => Icons.check_circle_outline,
+                      'rejected' => Icons.block,
+                      _ => Icons.help_outline,
+                    }),
+                    title: Text('${a.requestedBy}: ${a.action}'),
+                    subtitle: Text('${a.details}\n${a.status} · ${ago(a.createdAt)}'),
+                    isThreeLine: true,
+                    trailing: a.status != 'pending' || repo == null
+                        ? null
+                        : Wrap(spacing: 4, children: [
+                            TextButton(onPressed: () => repo.decide(a.id, approve: false), child: const Text('Reject')),
+                            FilledButton(onPressed: () => repo.decide(a.id, approve: true), child: const Text('Approve')),
+                          ]),
+                  ),
+              ]),
+      ),
     );
   }
 }

@@ -11,6 +11,7 @@ class PlacementChip extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final mac = ref.watch(macStatusProvider);
+    ref.watch(clockProvider); // re-judge freshness as time passes
     return mac.when(
       loading: () => const SizedBox.shrink(),
       error: (e, _) => const Chip(avatar: Icon(Icons.error_outline, size: 16), label: Text('Status unavailable')),
