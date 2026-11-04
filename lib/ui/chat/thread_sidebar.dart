@@ -202,7 +202,7 @@ class _ThreadTileState extends ConsumerState<ThreadTile> {
                       style: text.bodyMedium?.copyWith(fontWeight: widget.selected ? FontWeight.w600 : FontWeight.w500),
                     ),
                     Text(
-                      '${agentLabel(th.agent)}${th.closed ? ' · closed' : ''} · ${ago(th.updatedAt)}',
+                      '${agentLabel(th.agent)}${th.closed ? ' · closed' : ''} · ${th.updatedAt == null ? 'just now' : ago(th.updatedAt)}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: text.labelSmall,
