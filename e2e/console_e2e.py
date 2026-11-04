@@ -1,4 +1,6 @@
-"""Console E2E on emulators: sign-in gate, chat through the real Mac worker, Maintenance, Factory, close."""
+"""Console E2E on emulators with a real Mac worker (README, "End-to-end test"):
+sign-in gate, Overview live data, a chat that streams and finishes, stopping a
+turn, rename / pin, Projects and System, phone layout, both themes."""
 import re, sys
 from playwright.sync_api import sync_playwright, expect
 
@@ -20,67 +22,113 @@ def sign_in(page, email):
     p.locator('#display-name-input').fill('Operator')
     p.locator('#sign-in').click()
 
+def seen(page, pattern):
+    """Text on screen. Flutter merges a card's texts into one accessible
+    label, so this matches visible text or any element's aria-label."""
+    rx = pattern if isinstance(pattern, re.Pattern) else re.compile(re.escape(pattern))
+    return page.get_by_text(rx).or_(page.get_by_label(rx)).first
+
+def tab(page, name):
+    page.get_by_role('button', name=re.compile(f'^{name} Tab')).click()
+    page.wait_for_timeout(700)
+
+def type_and_send(page, box_name, text):
+    box = page.get_by_role('textbox', name=box_name)
+    box.click()
+    page.wait_for_timeout(400)
+    page.keyboard.type(text)
+    expect(box).to_have_value(text)
+    page.keyboard.press('Enter')  # Enter sends
+
 with sync_playwright() as pw:
     b = pw.chromium.launch()
-    ctx = b.new_context(viewport={'width': 1280, 'height': 800})
+    ctx = b.new_context(viewport={'width': 1440, 'height': 900})
     page = ctx.new_page()
     errors = []
     page.on('console', lambda m: errors.append(m.text) if m.type == 'error' else None)
 
     # 1. A stranger is refused.
     page.goto(URL); enable_semantics(page)
-    sign_in(page, 'obsidian.infinitum@gmail.com')  # the operator's other account: not admitted
-    expect(page.get_by_text('Not authorised')).to_be_visible(timeout=20000)
-    page.screenshot(path=f'{OUT}/1-stranger.png')
+    sign_in(page, 'obsidian.infinitum@gmail.com')
+    expect(seen(page, 'Not authorised')).to_be_visible(timeout=20000)
     page.get_by_role('button', name='Sign out').click()
-    expect(page.get_by_role('button', name=re.compile('Sign in with Google'))).to_be_visible(timeout=20000)
     print('stranger refused: ok')
 
-    # 2. The operator gets in and chats with Genie through the Mac worker.
+    # 2. The operator gets in; the Overview shows the live Mac worker.
     sign_in(page, 'siddharth.chitikela@gmail.com')
-    expect(page.get_by_role('button', name='New conversation')).to_be_visible(timeout=20000)
-    expect(page.get_by_role('checkbox', name='Mac')).to_be_visible(timeout=20000)
-    box = page.get_by_role('textbox', name='Message genie')
-    box.click()
-    page.wait_for_timeout(800)
-    page.keyboard.type('E2E check: reply with exactly the words console works')
-    expect(box).to_have_value('E2E check: reply with exactly the words console works')
-    page.get_by_role('button', name='Send').click()
-    page.screenshot(path=f'{OUT}/2-sent.png')
-    expect(page.get_by_role('textbox', name=re.compile('Answered on the mac'))).to_be_attached(timeout=180000)
-    expect(page.get_by_role('button', name=re.compile(r'^G E2E check.*genie · .*console works', re.I)).first).to_be_visible()
+    expect(page.get_by_role('button', name=re.compile('^Overview Tab'))).to_be_visible(timeout=30000)
+    page.add_style_tag(content='.firebase-emulator-warning{display:none!important}')
+    expect(seen(page, 'Mac worker')).to_be_visible(timeout=20000)
+    expect(seen(page, 'Serving')).to_be_visible(timeout=90000)
+    expect(seen(page, 'Live now')).to_be_visible()
+    page.screenshot(path=f'{OUT}/1-overview.png')
+    print('overview: ok')
+
+    # 3. A new chat with Genie streams and finishes.
+    tab(page, 'Chat')
+    page.get_by_role('button', name='New chat').click()
+    page.get_by_role('button', name=re.compile('Agent Genie')).click()
+    type_and_send(page, re.compile('Message Genie'), 'E2E: write exactly three numbered sentences about the sea, nothing else.')
+    expect(seen(page, re.compile('Waiting for the Mac|Thinking|Writing'))).to_be_visible(timeout=30000)
+    page.screenshot(path=f'{OUT}/2-pending.png')
+    expect(seen(page, re.compile(r'(PM|AM|\d) · Mac · '))).to_be_visible(timeout=240000)
     page.screenshot(path=f'{OUT}/3-reply.png')
     print('chat reply: ok')
 
-    # 3. Maintenance and Factory show live state.
-    page.get_by_role('button', name=re.compile('^Maintenance Tab')).click()
-    expect(page.get_by_text(re.compile('Serving'))).to_be_visible(timeout=20000)
-    expect(page.get_by_text(re.compile('genie · console-')).first).to_be_visible(timeout=20000)
-    page.screenshot(path=f'{OUT}/4-maintenance.png')
-    page.get_by_role('button', name=re.compile('^Factory Tab')).click()
-    expect(page.get_by_text(re.compile('No Devstations'))).to_be_visible(timeout=20000)
-    page.screenshot(path=f'{OUT}/5-factory.png')
-    print('maintenance and factory: ok')
+    # 4. Stopping a long turn keeps what it wrote (or notes it stopped early).
+    type_and_send(page, re.compile('Reply to Genie'), 'E2E: write a 900-word essay about lighthouses, in plain paragraphs.')
+    stop = page.get_by_role('button', name='Stop', exact=True)
+    expect(stop.last).to_be_visible(timeout=60000)
+    expect(seen(page, re.compile('Writing|Thinking'))).to_be_visible(timeout=120000)
+    page.wait_for_timeout(4000)
+    page.screenshot(path=f'{OUT}/4-streaming.png')
+    stop.last.click()
+    expect(seen(page, re.compile('Stopped'))).to_be_visible(timeout=60000)
+    page.screenshot(path=f'{OUT}/5-stopped.png')
+    print('stop: ok')
 
-    # 4. Closing the conversation journals it and closes the thread.
-    page.get_by_role('button', name=re.compile('^Chat Tab')).click()
-    page.get_by_role('button', name='Close', exact=True).first.click()
-    # A closed thread loses its composer and its Close button.
-    expect(page.get_by_role('textbox', name='Message genie')).to_have_count(0, timeout=180000)
-    expect(page.get_by_role('button', name='Close', exact=True)).to_have_count(0)
-    page.screenshot(path=f'{OUT}/6-closed.png')
-    print('close: ok')
+    # 5. Rename and pin through the conversation menu.
+    page.get_by_role('button', name='Conversation options').last.click()
+    page.get_by_role('menuitem', name=re.compile('Rename')).click()
+    box = page.get_by_role('textbox', name='Title')
+    box.click(); page.keyboard.press('ControlOrMeta+a'); page.keyboard.type('E2E sea essays')
+    page.get_by_role('button', name='Rename', exact=True).click()
+    expect(seen(page, 'E2E sea essays')).to_be_visible(timeout=20000)
+    page.get_by_role('button', name='Conversation options').last.click()
+    page.get_by_role('menuitem', name=re.compile('^Pin')).click()
+    expect(seen(page, re.compile('^Pinned$'))).to_be_visible(timeout=20000)
+    page.screenshot(path=f'{OUT}/6-renamed-pinned.png')
+    print('rename and pin: ok')
 
-    # 5. Narrow (phone) layout works.
-    page.set_viewport_size({'width': 390, 'height': 800})
+    # 6. The turns are counted; Projects and System render live data.
+    tab(page, 'Overview')
+    expect(seen(page, 'Chat turns today')).to_be_visible()
+    page.screenshot(path=f'{OUT}/7-overview-after.png', full_page=True)
+    tab(page, 'Projects')
+    expect(page.get_by_role('button', name='New Devstation')).to_be_visible()
+    page.screenshot(path=f'{OUT}/8-projects.png')
+    tab(page, 'System')
+    expect(seen(page, 'Agent sessions')).to_be_visible()
+    expect(seen(page, 'Where chats ran')).to_be_visible()
+    page.screenshot(path=f'{OUT}/9-system.png')
+    print('projects and system: ok')
+
+    # 7. Dark theme, then a phone.
+    page.get_by_role('button', name='Dark theme').click()
+    tab(page, 'Chat')
+    page.screenshot(path=f'{OUT}/10-dark.png')
+    page.set_viewport_size({'width': 390, 'height': 844})
     page.wait_for_timeout(1500)
-    page.screenshot(path=f'{OUT}/7a-phone-thread.png')
-    expect(page.get_by_role('button', name='Conversations')).to_be_visible()
-    page.get_by_role('button', name='Conversations').click()
-    expect(page.get_by_role('button', name='New conversation')).to_be_visible()
-    expect(page.get_by_role('tab', name=re.compile('Maintenance')).or_(page.get_by_role('button', name=re.compile('Maintenance'))).first).to_be_attached()
-    page.screenshot(path=f'{OUT}/7-phone.png')
-    print('phone layout: ok')
+    page.screenshot(path=f'{OUT}/11-phone-chat.png')
+    page.get_by_role('button', name='Conversations').first.click()
+    expect(page.get_by_role('button', name='New chat')).to_be_visible()
+    page.screenshot(path=f'{OUT}/12-phone-drawer.png')
+    page.keyboard.press('Escape'); page.wait_for_timeout(600)
+    page.get_by_role('tab', name=re.compile('Overview')).click()
+    page.wait_for_timeout(1200)
+    page.screenshot(path=f'{OUT}/13-phone-overview.png')
+    print('phone and dark: ok')
+
     bad = [e for e in errors if 'favicon' not in e]
-    print('console errors:', bad[:5])
+    print('console errors:', bad[:8])
     b.close()

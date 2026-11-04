@@ -5,25 +5,23 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/firebase.dart';
 import '../data/providers.dart';
 import 'shell.dart';
+import 'theme.dart';
 
-class ConsoleApp extends StatelessWidget {
-  const ConsoleApp({super.key});
+class ConsoleApp extends ConsumerWidget {
+  const ConsoleApp({super.key, this.fonts = true});
+
+  /// Load the Console's web fonts (tests use the platform's).
+  final bool fonts;
 
   @override
-  Widget build(BuildContext context) {
-    ThemeData theme(Brightness b) => ThemeData(
-      colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF3B5BA9), brightness: b),
-      useMaterial3: true,
-      visualDensity: VisualDensity.compact,
-    );
-    return MaterialApp(
-      title: 'Vral Altos Console',
-      debugShowCheckedModeBanner: false,
-      theme: theme(Brightness.light),
-      darkTheme: theme(Brightness.dark),
-      home: const AuthGate(),
-    );
-  }
+  Widget build(BuildContext context, WidgetRef ref) => MaterialApp(
+    title: 'Vral Altos Console',
+    debugShowCheckedModeBanner: false,
+    theme: consoleTheme(Brightness.light, fonts: fonts),
+    darkTheme: consoleTheme(Brightness.dark, fonts: fonts),
+    themeMode: ref.watch(themeModeProvider),
+    home: const AuthGate(),
+  );
 }
 
 /// Signed-in owner → the Console; anyone else → the sign-in page.
@@ -107,25 +105,42 @@ class _Notice extends StatelessWidget {
   final Widget? action;
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    body: Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 420),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 40, color: Theme.of(context).colorScheme.primary),
-              const SizedBox(height: 16),
-              Text(title, style: Theme.of(context).textTheme.headlineSmall),
-              const SizedBox(height: 8),
-              Text(body, textAlign: TextAlign.center),
-              if (action != null) ...[const SizedBox(height: 20), action!],
-            ],
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final t = Theme.of(context).extension<Tokens>();
+    return Scaffold(
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(28, 32, 28, 28),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 52,
+                      height: 52,
+                      decoration: BoxDecoration(
+                        color: scheme.primary.withValues(alpha: .12),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Icon(icon, size: 28, color: scheme.primary),
+                    ),
+                    const SizedBox(height: 18),
+                    Text(title, style: Theme.of(context).textTheme.titleLarge, textAlign: TextAlign.center),
+                    const SizedBox(height: 8),
+                    Text(body, textAlign: TextAlign.center, style: TextStyle(color: t?.muted)),
+                    if (action != null) ...[const SizedBox(height: 22), action!],
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }

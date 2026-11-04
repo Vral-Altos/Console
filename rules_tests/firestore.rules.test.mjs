@@ -60,11 +60,18 @@ beforeEach(async () => {
     await setDoc(doc(db, 'approvals/a1'), { requestedBy: 'director-x', action: 'spend', status: 'pending' });
     await setDoc(doc(db, 'approvals/done'), { requestedBy: 'director-x', action: 'spend', status: 'approved' });
     await setDoc(doc(db, 'factory_requests/r1'), { action: 'stop', devstationId: 'ds', status: 'done' });
+    await setDoc(doc(db, 'messages/q1'), { threadId: 't1', role: 'operator', text: 'q', status: 'queued' });
+    await setDoc(doc(db, 'messages/r1'), { threadId: 't1', role: 'operator', text: 'r', status: 'running' });
+    await setDoc(doc(db, 'messages/d1'), { threadId: 't1', role: 'operator', text: 'd', status: 'done' });
+    await setDoc(doc(db, 'stats/usage'), { turns: 1 });
+    await setDoc(doc(db, 'usage_days/2026-11-04'), { turns: 1 });
+    await setDoc(doc(db, 'billing/current'), { costAmount: 1 });
   });
 });
 
 describe('reads', () => {
-  const readable = ['threads/t1', 'messages/m1', 'status/mac', 'agent_mesh/state', 'autobench/latest', 'devstations/d1'];
+  const readable = ['threads/t1', 'messages/m1', 'status/mac', 'agent_mesh/state', 'autobench/latest', 'devstations/d1',
+    'stats/usage', 'usage_days/2026-11-04', 'billing/current'];
 
   test('the operator reads the Console data', async () => {
     for (const path of readable) {
@@ -103,8 +110,19 @@ describe('threads', () => {
     await assertFails(setDoc(doc(owner(), 'threads/e'), thread({ createdAt: new Date(0) })));
   });
 
-  test('threads are never changed or deleted by clients', async () => {
-    await assertFails(updateDoc(doc(owner(), 'threads/t1'), { title: 'x' }));
+  test('the operator renames, pins and archives a thread', async () => {
+    await assertSucceeds(updateDoc(doc(owner(), 'threads/t1'), { title: 'Renamed' }));
+    await assertSucceeds(updateDoc(doc(owner(), 'threads/t1'), { pinned: true }));
+    await assertSucceeds(updateDoc(doc(owner(), 'threads/t1'), { archived: true }));
+  });
+
+  test('other thread changes, and deletes, are refused', async () => {
+    await assertFails(updateDoc(doc(owner(), 'threads/t1'), { title: '' }));
+    await assertFails(updateDoc(doc(owner(), 'threads/t1'), { closed: true, title: 'x' }));
+    await assertFails(updateDoc(doc(owner(), 'threads/closed'), { closed: false }));
+    await assertFails(updateDoc(doc(owner(), 'threads/t1'), { agent: 'roman' }));
+    await assertFails(updateDoc(doc(owner(), 'threads/t1'), { pinned: 'yes' }));
+    await assertFails(updateDoc(doc(stranger(), 'threads/t1'), { title: 'x' }));
     await assertFails(deleteDoc(doc(owner(), 'threads/t1')));
   });
 
@@ -134,8 +152,20 @@ describe('messages', () => {
     await assertFails(setDoc(doc(owner(), 'messages/b'), message({ threadId: 'closed' })));
   });
 
-  test('messages are never changed or deleted by clients', async () => {
+  test('the operator cancels a queued message or asks a running one to stop', async () => {
+    await assertSucceeds(updateDoc(doc(owner(), 'messages/q1'), { status: 'cancelled' }));
+    await assertSucceeds(updateDoc(doc(owner(), 'messages/r1'), { cancelRequested: true }));
+  });
+
+  test('messages are otherwise never changed or deleted by clients', async () => {
     await assertFails(updateDoc(doc(owner(), 'messages/m1'), { text: 'x' }));
+    await assertFails(updateDoc(doc(owner(), 'messages/q1'), { status: 'done' }));
+    await assertFails(updateDoc(doc(owner(), 'messages/q1'), { status: 'cancelled', text: 'x' }));
+    await assertFails(updateDoc(doc(owner(), 'messages/r1'), { status: 'cancelled' }));
+    await assertFails(updateDoc(doc(owner(), 'messages/d1'), { cancelRequested: true }));
+    await assertFails(updateDoc(doc(owner(), 'messages/d1'), { status: 'cancelled' }));
+    await assertFails(updateDoc(doc(owner(), 'messages/m1'), { cancelRequested: true }));
+    await assertFails(updateDoc(doc(stranger(), 'messages/q1'), { status: 'cancelled' }));
     await assertFails(deleteDoc(doc(owner(), 'messages/m1')));
   });
 
@@ -144,6 +174,9 @@ describe('messages', () => {
     await assertFails(setDoc(doc(owner(), 'agent_mesh/state'), { json: '{}' }));
     await assertFails(setDoc(doc(owner(), 'autobench/latest'), { nav: 0 }));
     await assertFails(setDoc(doc(owner(), 'devstations/d2'), { project: 'p' }));
+    await assertFails(setDoc(doc(owner(), 'stats/usage'), { turns: 0 }));
+    await assertFails(setDoc(doc(owner(), 'usage_days/2026-11-05'), { turns: 0 }));
+    await assertFails(setDoc(doc(owner(), 'billing/current'), { costAmount: 0 }));
   });
 });
 

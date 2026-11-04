@@ -78,7 +78,7 @@ void main() {
         'sessions': [
           {
             'sessionId': 's', 'agent': 'genie', 'taskId': 'console-t1', 'accountId': 'a',
-            'status': 'active', 'contextTokens': 1200, 'turns': 3, 'compactions': 0,
+            'status': 'active', 'contextTokens': 1200, 'turns': 3, 'compactions': 0, 'costUsd': 0.25,
             'createdAt': '2026-11-04T08:00:00.000Z', 'lastUsedAt': '2026-11-04T08:05:00.000Z',
           },
         ],
@@ -88,6 +88,7 @@ void main() {
     expect(mesh.accounts.single.fiveHour!.utilization, 0.42);
     expect(mesh.accounts.single.sevenDay, isNull);
     expect(mesh.sessions.single.turns, 3);
+    expect(mesh.sessions.single.costUsd, 0.25);
   });
 
   test("with no accounts, the host login's usage is shown", () {
@@ -107,5 +108,90 @@ void main() {
     expect(macIsOn(null, now), isFalse);
     expect(macIsOn(HostStatus(lastSeen: now.subtract(const Duration(seconds: 50))), now), isTrue);
     expect(macIsOn(HostStatus(lastSeen: now.subtract(const Duration(minutes: 5))), now), isFalse);
+  });
+
+  test('stop cancels a queued message and asks a running one to stop', () async {
+    await db.doc('messages/q').set({'threadId': 't', 'role': 'operator', 'status': 'queued'});
+    await db.doc('messages/r').set({'threadId': 't', 'role': 'operator', 'status': 'running'});
+    await db.doc('messages/d').set({'threadId': 't', 'role': 'operator', 'status': 'done'});
+    await repo.stop('q');
+    await repo.stop('r');
+    await repo.stop('d');
+    expect((await db.doc('messages/q').get()).data(), {'threadId': 't', 'role': 'operator', 'status': 'cancelled'});
+    expect((await db.doc('messages/r').get()).data()!['cancelRequested'], true);
+    expect((await db.doc('messages/r').get()).data()!['status'], 'running');
+    expect((await db.doc('messages/d').get()).data(), {'threadId': 't', 'role': 'operator', 'status': 'done'},
+        reason: 'a finished message is left alone');
+  });
+
+  test('threads are renamed, pinned and archived with only those fields', () async {
+    final id = await repo.startThread(agent: 'genie', text: 'hello');
+    await repo.rename(id, '  Weekly   plan ');
+    await repo.setPinned(id, true);
+    await repo.setArchived(id, true);
+    final th = threadFrom(id, (await db.doc('threads/$id').get()).data()!);
+    expect(th.title, 'Weekly plan');
+    expect(th.pinned, isTrue);
+    expect(th.archived, isTrue);
+    expect(() => repo.rename(id, '   '), throwsArgumentError);
+  });
+
+  test('only queued and running messages are active', () async {
+    for (final (id, status) in [('a', 'queued'), ('b', 'running'), ('c', 'done'), ('d', 'cancelled')]) {
+      await db.doc('messages/$id').set({'threadId': 't', 'role': 'operator', 'status': status, 'createdAt': DateTime.utc(2026)});
+    }
+    expect((await repo.activeMessages().first).map((m) => m.id).toSet(), {'a', 'b'});
+  });
+
+  test('live progress and turn details are read from messages', () {
+    final m = messageFrom('m', {
+      'threadId': 't', 'role': 'operator', 'status': 'running', 'partial': 'Half', 'activity': 'Using Read',
+      'tools': ['Read'], 'cancelRequested': true,
+    });
+    expect((m.partial, m.activity, m.tools.join(), m.cancelRequested), ('Half', 'Using Read', 'Read', true));
+    final r = messageFrom('r', {
+      'threadId': 't', 'role': 'agent', 'text': 'x', 'costUsd': 0.05, 'outputTokens': 21, 'durationMs': 2725,
+      'model': 'claude-opus-5-5', 'stopped': true,
+    });
+    expect((r.costUsd, r.outputTokens, r.durationMs, r.model, r.stopped), (0.05, 21, 2725, 'claude-opus-5-5', true));
+  });
+
+  test('host metrics, history and agent descriptions are read from status', () {
+    final h = hostFrom({
+      'lastSeen': DateTime.utc(2026, 11, 4),
+      'agents': ['genie'],
+      'agentInfo': {'genie': {'description': 'Your assistant'}, 'x': <String, Object?>{}},
+      'metrics': {'cores': 8, 'cpu': 0.25, 'memUsed': 4, 'memTotal': 8, 'at': DateTime.utc(2026, 11, 4)},
+      'history': [
+        {'t': 1793800000, 'c': 0.1, 'm': 0.5},
+        {'t': 1793800050, 'c': 0.2},
+      ],
+    });
+    expect(h.agentInfo, {'genie': 'Your assistant'});
+    expect(h.metrics!.cores, 8);
+    expect(h.metrics!.cpu, 0.25);
+    expect(h.history.map((p) => p.cpu), [0.1, 0.2]);
+    expect(h.history.last.mem, isNull);
+  });
+
+  test('usage stats, days and billing are read', () async {
+    final u = usageStatsFrom({
+      'turns': 3, 'costUsd': 0.5, 'byAgent': {'genie': {'turns': 2, 'costUsd': 0.4}}, 'byPlacement': {'mac': {'turns': 3}},
+    });
+    expect(u.byAgent['genie']!.turns, 2);
+    expect(u.byPlacement['mac']!.costUsd, 0);
+    for (final d in ['2026-11-02', '2026-11-04', '2026-11-03']) {
+      await db.doc('usage_days/$d').set({'turns': int.parse(d.substring(8))});
+    }
+    final days = await repo.usageDays(days: 2, now: DateTime.utc(2026, 11, 4, 3)).first;
+    expect(days.map((d) => d.day), ['2026-11-03', '2026-11-04'], reason: 'the latest days, oldest first');
+    final b = billingFrom({'costAmount': 2.5, 'budgetAmount': 30, 'currencyCode': 'SGD', 'days': {'2026-11-04': 2.5}})!;
+    expect((b.costAmount, b.budgetAmount, b.days['2026-11-04']), (2.5, 30.0, 2.5));
+    expect(billingFrom({'month': '2026-11'}), isNull);
+  });
+
+  test('the operator day is Singapore time', () {
+    expect(operatorDay(DateTime.utc(2026, 11, 4, 15, 59)), '2026-11-04');
+    expect(operatorDay(DateTime.utc(2026, 11, 4, 16)), '2026-11-05');
   });
 }

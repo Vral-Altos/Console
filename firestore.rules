@@ -5,7 +5,9 @@ rules_version = '2';
 // IAM and are not subject to these rules. Clients get:
 // - the operator only (the verified Google account below), nobody else;
 // - read access to the Console's data and the status the system reports;
-// - write access only to start threads and queue operator messages.
+// - write access only to start threads and queue operator messages; to
+//   rename, pin and archive threads; to cancel a queued message or ask a
+//   running one to stop; to queue Factory requests and decide approvals.
 service cloud.firestore {
   match /databases/{database}/documents {
     function isOwner() {
@@ -28,7 +30,12 @@ service cloud.firestore {
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time
         && request.resource.data.closed == false;
-      allow update, delete: if false;
+      allow update: if isOwner()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'pinned', 'archived'])
+        && isShortString(request.resource.data.title, 200)
+        && request.resource.data.get('pinned', false) is bool
+        && request.resource.data.get('archived', false) is bool;
+      allow delete: if false;
     }
 
     // The mailbox: the Console only queues operator messages; replies and
@@ -45,7 +52,16 @@ service cloud.firestore {
         && request.resource.data.threadId is string
         && existsAfter(/databases/$(database)/documents/threads/$(request.resource.data.threadId))
         && getAfter(/databases/$(database)/documents/threads/$(request.resource.data.threadId)).data.closed == false;
-      allow update, delete: if false;
+      // Stop: a queued message is cancelled; a running one is asked to stop
+      // (its worker ends the turn).
+      allow update: if isOwner() && resource.data.role == 'operator' && (
+        (resource.data.status == 'queued'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+          && request.resource.data.status == 'cancelled')
+        || (resource.data.status == 'running'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['cancelRequested'])
+          && request.resource.data.cancelRequested == true));
+      allow delete: if false;
     }
 
     // Reported by the system; read-only for the Console.
@@ -59,6 +75,15 @@ service cloud.firestore {
       allow read: if isOwner();
     }
     match /devstations/{id} {
+      allow read: if isOwner();
+    }
+    match /stats/{doc} {
+      allow read: if isOwner();
+    }
+    match /usage_days/{day} {
+      allow read: if isOwner();
+    }
+    match /billing/{doc} {
       allow read: if isOwner();
     }
 

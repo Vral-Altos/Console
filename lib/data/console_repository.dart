@@ -5,9 +5,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'models.dart';
 
 /// Every read and write the Console makes, against the platform database.
-/// The Console only ever creates threads and queued operator messages; the
-/// Mac worker or the cloud runner does the rest (`meshes/agent_mesh`,
-/// Mailbox).
+/// The Console creates threads, queued operator messages and Factory
+/// requests; it may rename, pin and archive threads, cancel a queued message
+/// or ask a running one to stop, and decide approvals. The workers do the
+/// rest (`meshes/agent_mesh`, Mailbox). `firestore.rules` allows exactly
+/// these writes.
 class ConsoleRepository {
   ConsoleRepository(this._db);
 
@@ -18,12 +20,19 @@ class ConsoleRepository {
 
   Stream<List<ChatThread>> threads() => _threads
       .orderBy('updatedAt', descending: true)
-      .limit(100)
+      .limit(300)
       .snapshots()
       .map((s) => [for (final d in s.docs) threadFrom(d.id, d.data())]);
 
   Stream<List<ChatMessage>> messages(String threadId) => _messages
       .where('threadId', isEqualTo: threadId)
+      .orderBy('createdAt')
+      .snapshots()
+      .map((s) => [for (final d in s.docs) messageFrom(d.id, d.data())]);
+
+  /// Operator messages waiting for, or being answered by, a worker.
+  Stream<List<ChatMessage>> activeMessages() => _messages
+      .where('status', whereIn: ['queued', 'running'])
       .orderBy('createdAt')
       .snapshots()
       .map((s) => [for (final d in s.docs) messageFrom(d.id, d.data())]);
@@ -34,7 +43,7 @@ class ConsoleRepository {
     final batch = _db.batch()
       ..set(ref, {
         'agent': agent,
-        'title': _title(text),
+        'title': titleFor(text),
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
         'closed': false,
@@ -61,10 +70,41 @@ class ConsoleRepository {
     'createdAt': FieldValue.serverTimestamp(),
   };
 
+  Future<void> rename(String threadId, String title) {
+    final t = title.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (t.isEmpty) throw ArgumentError('A title cannot be empty.');
+    return _threads.doc(threadId).update({'title': t.length <= 200 ? t : t.substring(0, 200)});
+  }
+
+  Future<void> setPinned(String threadId, bool pinned) => _threads.doc(threadId).update({'pinned': pinned});
+
+  Future<void> setArchived(String threadId, bool archived) =>
+      _threads.doc(threadId).update({'archived': archived});
+
+  /// Stops a message: a queued one is cancelled outright (no worker has it
+  /// yet); a running one is asked to stop, and its worker stops the turn,
+  /// keeping what it wrote.
+  Future<void> stop(String messageId) => _db.runTransaction((tx) async {
+    final ref = _messages.doc(messageId);
+    final snap = await tx.get(ref);
+    switch (snap.data()?['status']) {
+      case 'queued':
+        tx.update(ref, {'status': 'cancelled'});
+      case 'running':
+        tx.update(ref, {'cancelRequested': true});
+    }
+  });
+
   Stream<HostStatus?> hostStatus(String host) => _db
       .doc('status/$host')
       .snapshots()
       .map((d) => d.exists ? hostFrom(d.data()!) : null);
+
+  /// Every host's status (`status/mac`, `status/cloud`,
+  /// `status/devstation-*`).
+  Stream<Map<String, HostStatus>> allStatus() => _db.collection('status').snapshots().map(
+    (s) => {for (final d in s.docs) d.id: hostFrom(d.data())},
+  );
 
   Stream<MeshView?> mesh() => _db
       .doc('agent_mesh/state')
@@ -81,6 +121,27 @@ class ConsoleRepository {
         : null,
   );
 
+  Stream<UsageStats?> usageStats() => _db
+      .doc('stats/usage')
+      .snapshots()
+      .map((d) => d.exists ? usageStatsFrom(d.data()!) : null);
+
+  /// The operator days (ids `yyyy-mm-dd`) of the last [days] days that had
+  /// chat turns, oldest first.
+  Stream<List<UsageDay>> usageDays({int days = 31, DateTime? now}) {
+    final from = (now ?? DateTime.now()).toUtc().add(const Duration(hours: 8)).subtract(Duration(days: days - 1));
+    return _db
+        .collection('usage_days')
+        .where(FieldPath.documentId, isGreaterThanOrEqualTo: from.toIso8601String().substring(0, 10))
+        .snapshots()
+        .map((s) => [for (final d in s.docs) usageDayFrom(d.id, d.data())]..sort((a, b) => a.day.compareTo(b.day)));
+  }
+
+  Stream<BillingView?> billing() => _db
+      .doc('billing/current')
+      .snapshots()
+      .map((d) => d.exists ? billingFrom(d.data()!) : null);
+
   Stream<List<Devstation>> devstations() => _db.collection('devstations').snapshots().map(
     (s) => [
       for (final d in s.docs)
@@ -91,7 +152,7 @@ class ConsoleRepository {
   Stream<List<FactoryRequest>> factoryRequests() => _db
       .collection('factory_requests')
       .orderBy('createdAt', descending: true)
-      .limit(20)
+      .limit(30)
       .snapshots()
       .map((s) => [
             for (final d in s.docs)
@@ -100,7 +161,9 @@ class ConsoleRepository {
                 action: d.data()['action'] as String? ?? '',
                 devstationId: d.data()['devstationId'] as String? ?? '',
                 status: d.data()['status'] as String? ?? '',
+                project: d.data()['project'] as String?,
                 createdAt: _time(d.data()['createdAt']),
+                finishedAt: _time(d.data()['finishedAt']),
                 error: d.data()['error'] as String?,
                 buildId: d.data()['buildId'] as String?,
               ),
@@ -128,7 +191,7 @@ class ConsoleRepository {
   Stream<List<Approval>> approvals() => _db
       .collection('approvals')
       .orderBy('createdAt', descending: true)
-      .limit(30)
+      .limit(50)
       .snapshots()
       .map((s) => [
             for (final d in s.docs)
@@ -149,13 +212,7 @@ class ConsoleRepository {
         'decidedAt': FieldValue.serverTimestamp(),
       });
 
-  /// Every host's status (`status/mac`, `status/cloud`,
-  /// `status/devstation-*`), for the agents each one runs.
-  Stream<Map<String, HostStatus>> allStatus() => _db.collection('status').snapshots().map(
-    (s) => {for (final d in s.docs) d.id: hostFrom(d.data())},
-  );
-
-  static String _title(String text) {
+  static String titleFor(String text) {
     final one = text.replaceAll(RegExp(r'\s+'), ' ').trim();
     return one.length <= 60 ? one : '${one.substring(0, 59)}…';
   }
@@ -168,6 +225,9 @@ DateTime? _time(Object? v) => switch (v) {
   _ => null,
 };
 
+int? _int(Object? v) => v is num ? v.toInt() : null;
+double? _double(Object? v) => v is num ? v.toDouble() : null;
+
 ChatThread threadFrom(String id, Map<String, dynamic> d) => ChatThread(
   id: id,
   agent: d['agent'] as String? ?? 'genie',
@@ -176,20 +236,34 @@ ChatThread threadFrom(String id, Map<String, dynamic> d) => ChatThread(
   updatedAt: _time(d['updatedAt']),
   lastMessage: d['lastMessage'] as String?,
   closed: d['closed'] as bool? ?? false,
+  pinned: d['pinned'] as bool? ?? false,
+  archived: d['archived'] as bool? ?? false,
 );
 
 ChatMessage messageFrom(String id, Map<String, dynamic> d) => ChatMessage(
   id: id,
-  threadId: d['threadId'] as String,
+  threadId: d['threadId'] as String? ?? '',
   fromOperator: d['role'] == 'operator',
   text: d['text'] as String? ?? '',
   kind: d['kind'] as String? ?? 'turn',
   createdAt: _time(d['createdAt']),
   status: MessageStatus.values.asNameMap()[d['status']],
   claimedBy: d['claimedBy'] as String?,
+  claimedAt: _time(d['claimedAt']),
+  finishedAt: _time(d['finishedAt']),
   error: d['error'] as String?,
   placement: d['placement'] as String?,
   accountId: d['accountId'] as String?,
+  partial: d['partial'] as String?,
+  activity: d['activity'] as String?,
+  tools: [for (final t in d['tools'] as List? ?? const []) '$t'],
+  cancelRequested: d['cancelRequested'] as bool? ?? false,
+  costUsd: _double(d['costUsd']),
+  outputTokens: _int(d['outputTokens']),
+  contextTokens: _int(d['contextTokens']),
+  durationMs: _int(d['durationMs']),
+  model: d['model'] as String?,
+  stopped: d['stopped'] as bool? ?? false,
 );
 
 Devstation devstationFrom(String id, Map<String, dynamic> d) => Devstation(
@@ -201,20 +275,99 @@ Devstation devstationFrom(String id, Map<String, dynamic> d) => Devstation(
   zone: d['zone'] as String?,
   repoUrl: d['repoUrl'] as String?,
   instance: d['instance'] as String?,
+  ip: d['ip'] as String?,
   error: d['error'] as String?,
+  createdAt: _time(d['createdAt']),
   updatedAt: _time(d['updatedAt']),
 );
 
-HostStatus hostFrom(Map<String, dynamic> d) => HostStatus(
-  lastSeen: _time(d['lastSeen']),
-  host: d['host'] as String?,
-  agents: [for (final a in d['agents'] as List? ?? const []) a as String],
-  startedAt: _time(d['startedAt']),
-  revision: d['revision'] as String?,
-  lastRunAt: _time(d['lastRunAt']),
-  lastResult: d['lastResult'] as String?,
-  claudeVersion: d['claudeVersion'] as String?,
+HostStatus hostFrom(Map<String, dynamic> d) {
+  final m = d['metrics'] as Map?;
+  return HostStatus(
+    lastSeen: _time(d['lastSeen']),
+    host: d['host'] as String?,
+    agents: [for (final a in d['agents'] as List? ?? const []) '$a'],
+    agentInfo: {
+      for (final e in ((d['agentInfo'] as Map?) ?? const {}).entries)
+        if ((e.value as Map?)?['description'] is String) '${e.key}': (e.value as Map)['description'] as String,
+    },
+    startedAt: _time(d['startedAt']),
+    revision: d['revision'] as String?,
+    lastRunAt: _time(d['lastRunAt']),
+    lastResult: d['lastResult'] as String?,
+    claudeVersion: d['claudeVersion'] as String?,
+    devstation: d['devstation'] as String?,
+    metrics: m == null
+        ? null
+        : HostMetricsView(
+            at: _time(m['at']),
+            cores: _int(m['cores']) ?? 0,
+            cpu: _double(m['cpu']),
+            memUsed: _int(m['memUsed']),
+            memTotal: _int(m['memTotal']),
+            diskUsed: _int(m['diskUsed']),
+            diskTotal: _int(m['diskTotal']),
+            load1: _double(m['load1']),
+            rss: _int(m['rss']),
+          ),
+    history: [
+      for (final p in d['history'] as List? ?? const [])
+        if (p is Map && p['t'] is num)
+          MetricPoint(
+            at: DateTime.fromMillisecondsSinceEpoch((p['t'] as num).toInt() * 1000),
+            cpu: _double(p['c']),
+            mem: _double(p['m']),
+          ),
+    ],
+  );
+}
+
+Map<String, UsageSlice> _slices(Object? raw) => {
+  for (final e in ((raw as Map?) ?? const {}).entries)
+    if (e.value is Map)
+      '${e.key}': UsageSlice(
+        turns: _int((e.value as Map)['turns']) ?? 0,
+        costUsd: _double((e.value as Map)['costUsd']) ?? 0,
+        failed: _int((e.value as Map)['failed']) ?? 0,
+      ),
+};
+
+UsageStats usageStatsFrom(Map<String, dynamic> d) => UsageStats(
+  turns: _int(d['turns']) ?? 0,
+  costUsd: _double(d['costUsd']) ?? 0,
+  outputTokens: _int(d['outputTokens']) ?? 0,
+  durationMs: _int(d['durationMs']) ?? 0,
+  failed: _int(d['failed']) ?? 0,
+  byAgent: _slices(d['byAgent']),
+  byPlacement: _slices(d['byPlacement']),
+  byAccount: _slices(d['byAccount']),
 );
+
+UsageDay usageDayFrom(String id, Map<String, dynamic> d) => UsageDay(
+  day: id,
+  turns: _int(d['turns']) ?? 0,
+  costUsd: _double(d['costUsd']) ?? 0,
+  outputTokens: _int(d['outputTokens']) ?? 0,
+  durationMs: _int(d['durationMs']) ?? 0,
+  failed: _int(d['failed']) ?? 0,
+  byAgent: _slices(d['byAgent']),
+);
+
+BillingView? billingFrom(Map<String, dynamic> d) {
+  final cost = _double(d['costAmount']);
+  if (cost == null) return null;
+  return BillingView(
+    costAmount: cost,
+    budgetAmount: _double(d['budgetAmount']),
+    currencyCode: d['currencyCode'] as String?,
+    month: d['month'] as String?,
+    updatedAt: _time(d['updatedAt']),
+    days: {
+      for (final e in ((d['days'] as Map?) ?? const {}).entries)
+        if (e.value is num) '${e.key}': (e.value as num).toDouble(),
+    },
+  );
+}
 
 /// Reads the registry the agent mesh writes (a JSON string field).
 MeshView meshFrom(Map<String, dynamic> d) {
@@ -261,6 +414,9 @@ MeshView meshFrom(Map<String, dynamic> d) {
           contextTokens: (s['contextTokens'] as num?)?.toInt() ?? 0,
           turns: (s['turns'] as num?)?.toInt() ?? 0,
           compactions: (s['compactions'] as num?)?.toInt() ?? 0,
+          costUsd: (s['costUsd'] as num?)?.toDouble() ?? 0,
+          outputTokens: (s['outputTokens'] as num?)?.toInt() ?? 0,
+          createdAt: _time(s['createdAt']),
           lastUsedAt: _time(s['lastUsedAt']),
         ),
     ],
