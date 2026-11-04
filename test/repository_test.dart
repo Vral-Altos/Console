@@ -1,10 +1,12 @@
 import 'dart:convert';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:va_console/data/console_repository.dart';
 import 'package:va_console/data/models.dart';
 import 'package:va_console/data/providers.dart';
+import 'package:va_console/data/telemetry.dart';
 
 void main() {
   late FakeFirebaseFirestore db;
@@ -193,5 +195,50 @@ void main() {
   test('the operator day is Singapore time', () {
     expect(operatorDay(DateTime.utc(2026, 11, 4, 15, 59)), '2026-11-04');
     expect(operatorDay(DateTime.utc(2026, 11, 4, 16)), '2026-11-05');
+  });
+
+  test('operator actions leave an audit trail in the shape the rules allow', () async {
+    final id = await repo.startThread(agent: 'genie', text: 'hi');
+    await repo.send(id, 'more');
+    await repo.setPinned(id, true);
+    await repo.requestFactory(action: 'stop', devstationId: 'atlas');
+    await Future<void>.delayed(Duration.zero);
+    final logs = (await db.collection('logs').get()).docs.map((d) => d.data()).toList();
+    expect(logs.map((l) => l['message']), containsAll([
+      'Started a conversation with genie', 'Sent a message', 'Pinned a conversation', 'Requested Factory stop of atlas',
+    ]));
+    for (final l in logs) {
+      expect(l.keys.toSet(), {'at', 'source', 'component', 'severity', 'message', 'fields', 'expireAt'});
+      expect((l['source'], l['component'], l['severity']), ('console', 'audit', 'info'));
+    }
+  });
+
+  test('logs are read newest first, filtered by source and severity', () async {
+    final base = DateTime.utc(2026, 11, 4, 10);
+    for (final (i, src, sev) in [(0, 'mac-worker', 'info'), (1, 'cloud-runner', 'error'), (2, 'mac-worker', 'error')]) {
+      await db.collection('logs').add({
+        'at': Timestamp.fromDate(base.add(Duration(minutes: i))), 'source': src, 'component': 'mailbox',
+        'severity': sev, 'message': 'm$i', 'fields': {'threadId': 't'},
+      });
+    }
+    final all = await repo.logs(from: base).first;
+    expect(all.map((e) => e.message), ['m2', 'm1', 'm0']);
+    expect(all.first.fields['threadId'], 't');
+    expect((await repo.logs(from: base, source: 'mac-worker', severities: ['error']).first).single.message, 'm2');
+  });
+
+  test('metrics are bucketed: counters summed, gauges averaged', () {
+    final h = metricFrom({
+      'source': 'mac-worker', 'hour': Timestamp.fromDate(DateTime.utc(2026, 11, 4, 10)),
+      'h': {'turns': 3},
+      'm': {'m00': {'turns': 1, 'cpu': .2}, 'm01': {'turns': 2, 'cpu': .4}, 'm30': {'cpu': .9}},
+    })!;
+    expect(h.totals['turns'], 3);
+    final from = DateTime.utc(2026, 11, 4, 10);
+    final to = from.add(const Duration(hours: 1));
+    expect(bucketed([h], 'turns', from: from, to: to, bucket: const Duration(minutes: 30)), [3, null]);
+    expect(bucketed([h], 'cpu', from: from, to: to, bucket: const Duration(minutes: 30), gauge: true).map((v) => v?.toStringAsFixed(2)), ['0.30', '0.90']);
+    expect(bucketed([h], 'turns', from: from, to: to, bucket: const Duration(minutes: 30), source: 'cloud-runner'), [null, null]);
+    expect(total([h], 'turns', from: from, to: to), 3);
   });
 }

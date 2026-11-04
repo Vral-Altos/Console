@@ -384,3 +384,185 @@ class _SpendPainter extends CustomPainter {
   @override
   bool shouldRepaint(_SpendPainter old) => old.points != points || old.marks != marks || old.color != color;
 }
+
+/// One line or stack of a [TimeChart].
+typedef Series = ({String name, Color color, List<double?> values});
+
+/// Values over time in equal buckets from [from]: lines, or stacked bars
+/// ([stacked]); hover or tap reads out a bucket.
+class TimeChart extends StatefulWidget {
+  const TimeChart({
+    super.key,
+    required this.series,
+    required this.from,
+    required this.bucket,
+    this.stacked = false,
+    this.height = 150,
+    this.format,
+    this.max,
+  });
+
+  final List<Series> series;
+  final DateTime from;
+  final Duration bucket;
+  final bool stacked;
+  final double height;
+  final String Function(double v)? format;
+
+  /// A fixed top of the scale (e.g. 1 for fractions).
+  final double? max;
+
+  @override
+  State<TimeChart> createState() => _TimeChartState();
+}
+
+class _TimeChartState extends State<TimeChart> {
+  int? _hover;
+
+  int get _n => widget.series.isEmpty ? 0 : widget.series.first.values.length;
+
+  String _time(BuildContext context, DateTime t) {
+    final l = t.toLocal();
+    final hm = TimeOfDay.fromDateTime(l).format(context);
+    return widget.bucket >= const Duration(hours: 4) || DateTime.now().difference(t) > const Duration(hours: 24)
+        ? '${l.day}/${l.month} $hm'
+        : hm;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Tokens.of(context);
+    final text = Theme.of(context).textTheme;
+    final fmt = widget.format ?? (v) => v >= 100 ? v.toStringAsFixed(0) : v.toStringAsFixed(v == v.roundToDouble() ? 0 : 2);
+    double top = widget.max ?? 0;
+    if (widget.max == null) {
+      for (var i = 0; i < _n; i++) {
+        if (widget.stacked) {
+          top = math.max(top, widget.series.fold<double>(0, (a, s) => a + (s.values[i] ?? 0)));
+        } else {
+          for (final s in widget.series) {
+            top = math.max(top, s.values[i] ?? 0);
+          }
+        }
+      }
+    }
+    if (top <= 0) top = 1;
+    final shown = _hover;
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      SizedBox(
+        height: 34,
+        child: Wrap(spacing: 12, runSpacing: 2, crossAxisAlignment: WrapCrossAlignment.center, children: [
+          if (shown != null)
+            Text(_time(context, widget.from.add(widget.bucket * shown)), style: text.labelSmall?.copyWith(fontWeight: FontWeight.w600)),
+          for (final s in widget.series)
+            Row(mainAxisSize: MainAxisSize.min, children: [
+              Container(width: 8, height: 8, decoration: BoxDecoration(color: s.color, borderRadius: BorderRadius.circular(2))),
+              const SizedBox(width: 5),
+              Text(
+                shown == null ? s.name : '${s.name} ${s.values[shown] == null ? '—' : fmt(s.values[shown]!)}',
+                style: text.labelSmall,
+              ),
+            ]),
+        ]),
+      ),
+      LayoutBuilder(builder: (context, c) {
+        int? at(Offset p) => _n == 0 ? null : (p.dx / c.maxWidth * _n).floor().clamp(0, _n - 1);
+        return MouseRegion(
+          onHover: (e) => setState(() => _hover = at(e.localPosition)),
+          onExit: (_) => setState(() => _hover = null),
+          child: GestureDetector(
+            onTapDown: (e) => setState(() => _hover = at(e.localPosition)),
+            onHorizontalDragUpdate: (e) => setState(() => _hover = at(e.localPosition)),
+            child: SizedBox(
+              height: widget.height,
+              width: c.maxWidth,
+              child: CustomPaint(
+                painter: _TimePainter(widget.series, widget.stacked, top, t.border, shown, Theme.of(context).colorScheme.onSurface),
+              ),
+            ),
+          ),
+        );
+      }),
+      const SizedBox(height: 4),
+      Row(children: [
+        Text(_time(context, widget.from), style: text.labelSmall),
+        const Spacer(),
+        Text('max ${fmt(top)}', style: text.labelSmall),
+        const Spacer(),
+        Text('now', style: text.labelSmall),
+      ]),
+    ]);
+  }
+}
+
+class _TimePainter extends CustomPainter {
+  _TimePainter(this.series, this.stacked, this.top, this.grid, this.selected, this.ink);
+  final List<Series> series;
+  final bool stacked;
+  final double top;
+  final Color grid;
+  final int? selected;
+  final Color ink;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final g = Paint()..color = grid;
+    for (final f in [0.0, .5, 1.0]) {
+      final y = size.height - f * (size.height - 1) - .5;
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), g);
+    }
+    if (series.isEmpty) return;
+    final n = series.first.values.length;
+    if (n == 0) return;
+    final slot = size.width / n;
+    double y(double v) => size.height - (v / top).clamp(0, 1) * (size.height - 2) - 1;
+    if (stacked) {
+      final w = math.max(1.0, slot * .72);
+      for (var i = 0; i < n; i++) {
+        var base = 0.0;
+        for (final s in series) {
+          final v = s.values[i] ?? 0;
+          if (v <= 0) continue;
+          final r = Rect.fromLTRB(i * slot + (slot - w) / 2, y(base + v), i * slot + (slot + w) / 2, y(base));
+          canvas.drawRect(r, Paint()..color = s.color.withValues(alpha: selected == null || selected == i ? 1 : .55));
+          base += v;
+        }
+      }
+    } else {
+      for (final s in series) {
+        final path = Path();
+        var open = false;
+        for (var i = 0; i < n; i++) {
+          final v = s.values[i];
+          final x = i * slot + slot / 2;
+          if (v == null) {
+            open = false;
+            continue;
+          }
+          if (!open) {
+            path.moveTo(x, y(v));
+            open = true;
+          } else {
+            path.lineTo(x, y(v));
+          }
+          if (n <= 60) canvas.drawCircle(Offset(x, y(v)), 1.8, Paint()..color = s.color);
+        }
+        canvas.drawPath(
+          path,
+          Paint()
+            ..color = s.color
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.7
+            ..strokeJoin = StrokeJoin.round,
+        );
+      }
+    }
+    if (selected != null) {
+      final x = selected! * slot + slot / 2;
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), Paint()..color = ink.withValues(alpha: .25));
+    }
+  }
+
+  @override
+  bool shouldRepaint(_TimePainter old) => true;
+}

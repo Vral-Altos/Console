@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/models.dart';
 import '../data/providers.dart';
 import 'chat/chat_page.dart';
+import 'logs_page.dart';
 import 'overview_page.dart';
 import 'projects_page.dart';
 import 'system_page.dart';
@@ -17,11 +18,12 @@ const _destinations = <_Dest>[
   (page: ConsolePage.overview, icon: Icons.space_dashboard_outlined, selected: Icons.space_dashboard, label: 'Overview'),
   (page: ConsolePage.chat, icon: Icons.forum_outlined, selected: Icons.forum, label: 'Chat'),
   (page: ConsolePage.projects, icon: Icons.folder_outlined, selected: Icons.folder, label: 'Projects'),
+  (page: ConsolePage.logs, icon: Icons.receipt_long_outlined, selected: Icons.receipt_long, label: 'Logs'),
   (page: ConsolePage.system, icon: Icons.tune_outlined, selected: Icons.tune, label: 'System'),
 ];
 
 /// The Console's frame: a sidebar on wide screens, a bottom bar on phones.
-/// Ctrl/⌘+K starts a new chat; Ctrl/⌘+1…4 switch pages.
+/// Ctrl/⌘+K starts a new chat; Ctrl/⌘+1…5 switch pages.
 class Shell extends ConsumerWidget {
   const Shell({super.key});
 
@@ -41,7 +43,7 @@ class Shell extends ConsumerWidget {
     void go(ConsolePage p) => ref.read(pageProvider.notifier).go(p);
     final body = IndexedStack(
       index: page.index,
-      children: const [OverviewPage(), ChatPage(), ProjectsPage(), SystemPage()],
+      children: const [OverviewPage(), ChatPage(), ProjectsPage(), LogsPage(), SystemPage()],
     );
 
     return CallbackShortcuts(

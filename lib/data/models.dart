@@ -255,3 +255,34 @@ abstract class Approval with _$Approval {
     DateTime? decidedAt,
   }) = _Approval;
 }
+
+enum LogSeverity { debug, info, warning, error }
+
+/// One structured log entry (`logs/{id}`), from any service or the Console.
+@freezed
+abstract class LogEntry with _$LogEntry {
+  const factory LogEntry({
+    required String id,
+    required DateTime at,
+    required String source,
+    required String component,
+    required LogSeverity severity,
+    required String message,
+    String? host,
+    @Default(<String, Object?>{}) Map<String, Object?> fields,
+  }) = _LogEntry;
+}
+
+/// One source's metrics for one UTC hour (`metrics/{source}~{yyyyMMddHH}`):
+/// hour totals and per-minute values (counters added, gauges set).
+@freezed
+abstract class MetricHour with _$MetricHour {
+  const factory MetricHour({
+    required String source,
+    required DateTime hour,
+    @Default(<String, double>{}) Map<String, double> totals,
+
+    /// Minute of the hour (0–59) → metric name → value.
+    @Default(<int, Map<String, double>>{}) Map<int, Map<String, double>> minutes,
+  }) = _MetricHour;
+}

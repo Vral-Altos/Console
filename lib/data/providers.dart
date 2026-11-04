@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'console_repository.dart';
 import 'models.dart';
+import 'telemetry.dart';
 
 /// Overridden in main() with the initialised services (null: not configured).
 final firebaseAuthProvider = Provider<FirebaseAuth?>((ref) => null);
@@ -39,6 +40,19 @@ final devstationsProvider = StreamProvider<List<Devstation>>((ref) => _repo(ref)
 final factoryRequestsProvider =
     StreamProvider<List<FactoryRequest>>((ref) => _repo(ref).factoryRequests());
 final approvalsProvider = StreamProvider<List<Approval>>((ref) => _repo(ref).approvals());
+final logsProvider = StreamProvider.family<List<LogEntry>, LogQuery>(
+  (ref, q) => _repo(ref).logs(
+    from: q.from,
+    source: q.source,
+    severities: q.severities.isEmpty ? null : q.severities,
+    components: q.components.isEmpty ? null : q.components,
+    limit: q.limit,
+  ),
+);
+
+/// Metric hours since the given UTC hour (the caller rounds it, so the
+/// stream is reused across rebuilds).
+final metricsProvider = StreamProvider.family<List<MetricHour>, DateTime>((ref, from) => _repo(ref).metrics(from: from));
 
 /// Ticks every 15 s, so freshness ("is the Mac serving?") is re-judged even
 /// when nothing in the database changes (a stopped worker writes nothing).
@@ -61,7 +75,7 @@ final agentsProvider = Provider<List<({String name, String? description})>>((ref
 });
 
 /// The Console's pages.
-enum ConsolePage { overview, chat, projects, system }
+enum ConsolePage { overview, chat, projects, logs, system }
 
 final pageProvider = NotifierProvider<PageNotifier, ConsolePage>(PageNotifier.new);
 

@@ -113,7 +113,22 @@ with sync_playwright() as pw:
     page.screenshot(path=f'{OUT}/9-system.png')
     print('projects and system: ok')
 
-    # 7. Dark theme, then a phone.
+    # 7. The Logs page: the worker's entries, metrics and the audit trail.
+    tab(page, 'Logs')
+    expect(seen(page, re.compile('Turn done with genie'))).to_be_visible(timeout=60000)
+    expect(seen(page, re.compile('Turn stopped by the operator'))).to_be_visible(timeout=30000)
+    page.screenshot(path=f'{OUT}/9a-logs.png')
+    page.get_by_role('tab', name=re.compile('Monitoring')).click()
+    page.wait_for_timeout(1500)
+    expect(seen(page, 'Turn latency')).to_be_visible(timeout=20000)
+    page.screenshot(path=f'{OUT}/9b-monitoring.png')
+    page.get_by_role('tab', name=re.compile('Activity')).click()
+    expect(seen(page, re.compile('Started a conversation with genie'))).to_be_visible(timeout=30000)
+    expect(seen(page, re.compile('Worker started'))).to_be_visible(timeout=30000)
+    page.screenshot(path=f'{OUT}/9c-activity.png')
+    print('logs, monitoring and activity: ok')
+
+    # 8. Dark theme, then a phone.
     page.get_by_role('button', name='Dark theme').click()
     tab(page, 'Chat')
     page.screenshot(path=f'{OUT}/10-dark.png')

@@ -87,6 +87,27 @@ service cloud.firestore {
       allow read: if isOwner();
     }
 
+    // Telemetry: services write with IAM; the Console reads everything and
+    // adds only its own entries (its audit trail and client errors).
+    match /metrics/{id} {
+      allow read: if isOwner();
+    }
+    match /logs/{id} {
+      allow read: if isOwner();
+      allow create: if isOwner()
+        && request.resource.data.keys().hasOnly(['at', 'source', 'component', 'severity', 'message', 'fields', 'expireAt'])
+        && request.resource.data.source == 'console'
+        && request.resource.data.component in ['audit', 'client']
+        && request.resource.data.severity in ['info', 'warning', 'error']
+        && isShortString(request.resource.data.message, 2000)
+        && request.resource.data.at == request.time
+        && request.resource.data.expireAt is timestamp
+        && request.resource.data.expireAt > request.time
+        && request.resource.data.expireAt < request.time + duration.value(31, 'd')
+        && (!('fields' in request.resource.data) || (request.resource.data.fields is map && request.resource.data.fields.size() <= 20));
+      allow update, delete: if false;
+    }
+
     // The Factory: the Console queues requests; the cloud runner applies them.
     match /factory_requests/{id} {
       allow read: if isOwner();

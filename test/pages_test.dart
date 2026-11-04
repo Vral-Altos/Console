@@ -8,6 +8,7 @@ import 'package:va_console/data/providers.dart';
 import 'package:va_console/ui/app.dart';
 import 'package:va_console/ui/chat/chat_page.dart';
 import 'package:va_console/ui/chat/thread_sidebar.dart';
+import 'package:va_console/ui/logs_page.dart';
 import 'package:va_console/ui/overview_page.dart';
 import 'package:va_console/ui/projects_page.dart';
 import 'package:va_console/ui/system_page.dart';
@@ -56,6 +57,8 @@ List overridesWith({
   List<Devstation> devstations = const [],
   List<FactoryRequest> requests = const [],
   List<Approval> approvals = const [],
+  List<LogEntry> logs = const [],
+  List<MetricHour> metrics = const [],
 }) {
   final h = hosts ?? {'mac': macStatus()};
   return [
@@ -74,6 +77,8 @@ List overridesWith({
     portfolioSyncProvider.overrideWith((ref) => Stream.value(PortfolioSync(syncedAt: now, source: 'statement'))),
     clockProvider.overrideWith((ref) => const Stream.empty()),
     authStateProvider.overrideWith((ref) => Stream.value(null)),
+    logsProvider.overrideWith((ref, q) => Stream.value(logs.where((l) => q.components.isEmpty || q.components.contains(l.component)).toList())),
+    metricsProvider.overrideWith((ref, from) => Stream.value(metrics)),
   ];
 }
 
@@ -258,7 +263,7 @@ void main() {
           SessionView(sessionId: 's', agent: 'genie', taskId: 'console-t1', accountId: 'mac', status: 'active', contextTokens: 900, turns: 2, compactions: 0, lastUsedAt: now),
         ]),
       );
-      for (final page in [const OverviewPage(), const ProjectsPage(), const SystemPage(), const ChatPage()]) {
+      for (final page in [const OverviewPage(), const ProjectsPage(), const SystemPage(), const ChatPage(), const LogsPage()]) {
         await tester.pumpWidget(host(page, [
           ...o,
           messagesProvider('t1').overrideWith((ref) => Stream.value([
@@ -296,5 +301,63 @@ void main() {
     expect(find.text('Never seen'), findsNothing);
     expect(find.textContaining('Agents in the cloud'), findsNothing);
     expect(find.textContaining('Waiting for the budget'), findsNothing);
+  });
+
+  testWidgets('logs explorer lists entries, expands one, and filters by search', (tester) async {
+    size(tester, const Size(1400, 1400));
+    final logs = [
+      LogEntry(id: '1', at: now, source: 'mac-worker', component: 'mailbox', severity: LogSeverity.info,
+          message: 'Turn done with genie in 4.2 s', host: 'air', fields: const {'threadId': 't1', 'costUsd': 0.05}),
+      LogEntry(id: '2', at: now, source: 'cloud-runner', component: 'factory', severity: LogSeverity.error, message: 'Factory build b1 FAILURE'),
+    ];
+    final hour = DateTime.utc(now.toUtc().year, now.toUtc().month, now.toUtc().day, now.toUtc().hour);
+    final metrics = [MetricHour(source: 'mac-worker', hour: hour, minutes: {now.toUtc().minute: const {'log_info': 1, 'log_error': 1}})];
+    await tester.pumpWidget(host(const LogsPage(), overridesWith(logs: logs, metrics: metrics)));
+    await tester.pump();
+    expect(find.text('Turn done with genie in 4.2 s'), findsOneWidget);
+    expect(find.text('Factory build b1 FAILURE'), findsOneWidget);
+    expect(find.textContaining('2 entries'), findsOneWidget);
+    await tester.tap(find.text('Turn done with genie in 4.2 s'));
+    await tester.pump();
+    expect(find.text('Copy JSON'), findsOneWidget);
+    expect(find.text('Open conversation'), findsOneWidget);
+    expect(find.text('0.05'), findsOneWidget);
+    await tester.enterText(find.byType(TextField).first, 'factory');
+    await tester.pump();
+    expect(find.text('Turn done with genie in 4.2 s'), findsNothing);
+    expect(find.textContaining('1 entry'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('monitoring charts the metric hours; activity shows the trail', (tester) async {
+    size(tester, const Size(1400, 2400));
+    final u = now.toUtc();
+    final hour = DateTime.utc(u.year, u.month, u.day, u.hour);
+    final metrics = [
+      MetricHour(source: 'mac-worker', hour: hour, minutes: {u.minute: const {'turns': 4, 'turn_ms': 8000, 'turns_failed': 1, 'cpu': .3, 'mem': .6, 'cost_usd': .2, 'log_error': 1}}),
+      MetricHour(source: 'cloud-runner', hour: hour, minutes: {u.minute: const {'http_requests': 3, 'cpu': .05}}),
+    ];
+    final logs = [
+      LogEntry(id: 'a', at: now, source: 'console', component: 'audit', severity: LogSeverity.info, message: 'Sent a message', fields: const {'threadId': 't1'}),
+      LogEntry(id: 'b', at: now, source: 'mac-worker', component: 'lifecycle', severity: LogSeverity.info, message: 'Worker started'),
+    ];
+    await tester.pumpWidget(host(const LogsPage(), overridesWith(logs: logs, metrics: metrics)));
+    await tester.pump();
+    await tester.tap(find.text('Monitoring'));
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('Chat turns'), findsWidgets);
+    expect(find.text('4'), findsOneWidget, reason: 'turns in range');
+    expect(find.text('2s'), findsOneWidget, reason: 'average turn');
+    expect(find.text('3'), findsOneWidget, reason: 'runner wake-ups');
+    expect(find.text('CPU by host'), findsOneWidget);
+    await tester.tap(find.text('Activity'));
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 500));
+    }
+    expect(find.text('Sent a message'), findsOneWidget);
+    expect(find.text('Worker started'), findsOneWidget);
+    expect(find.textContaining('You, in the Console'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }

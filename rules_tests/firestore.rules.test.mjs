@@ -66,12 +66,14 @@ beforeEach(async () => {
     await setDoc(doc(db, 'stats/usage'), { turns: 1 });
     await setDoc(doc(db, 'usage_days/2026-11-04'), { turns: 1 });
     await setDoc(doc(db, 'billing/current'), { costAmount: 1 });
+    await setDoc(doc(db, 'logs/l1'), { source: 'mac-worker', message: 'x' });
+    await setDoc(doc(db, 'metrics/mac-worker~2026110410'), { source: 'mac-worker' });
   });
 });
 
 describe('reads', () => {
   const readable = ['threads/t1', 'messages/m1', 'status/mac', 'agent_mesh/state', 'autobench/latest', 'devstations/d1',
-    'stats/usage', 'usage_days/2026-11-04', 'billing/current'];
+    'stats/usage', 'usage_days/2026-11-04', 'billing/current', 'logs/l1', 'metrics/mac-worker~2026110410'];
 
   test('the operator reads the Console data', async () => {
     for (const path of readable) {
@@ -225,5 +227,34 @@ describe('approvals', () => {
     await assertFails(setDoc(doc(owner(), 'approvals/new'), { requestedBy: 'me', status: 'approved' }));
     await assertFails(updateDoc(doc(stranger(), 'approvals/a1'), { status: 'approved', decidedAt: serverTimestamp() }));
     await assertFails(updateDoc(doc(otherAccount(), 'approvals/a1'), { status: 'approved', decidedAt: serverTimestamp() }));
+  });
+});
+
+describe('telemetry', () => {
+  const entry = (extra = {}) => ({
+    at: serverTimestamp(), source: 'console', component: 'audit', severity: 'info',
+    message: 'Sent a message', fields: { threadId: 't1' },
+    expireAt: new Date(Date.now() + 14 * 864e5), ...extra,
+  });
+
+  test('the Console adds its audit trail and client errors', async () => {
+    await assertSucceeds(setDoc(doc(owner(), 'logs/a'), entry()));
+    await assertSucceeds(setDoc(doc(owner(), 'logs/b'), entry({ component: 'client', severity: 'error' })));
+  });
+
+  test('it cannot pose as a service or keep entries for long', async () => {
+    await assertFails(setDoc(doc(owner(), 'logs/a'), entry({ source: 'mac-worker' })));
+    await assertFails(setDoc(doc(owner(), 'logs/b'), entry({ component: 'lifecycle' })));
+    await assertFails(setDoc(doc(owner(), 'logs/c'), entry({ expireAt: new Date(Date.now() + 90 * 864e5) })));
+    await assertFails(setDoc(doc(owner(), 'logs/d'), entry({ at: new Date(0) })));
+    await assertFails(setDoc(doc(owner(), 'logs/e'), entry({ host: 'x' })));
+    await assertFails(setDoc(doc(owner(), 'logs/f'), entry({ message: '' })));
+    await assertFails(setDoc(doc(stranger(), 'logs/g'), entry()));
+  });
+
+  test('entries and metrics are never changed by clients', async () => {
+    await assertFails(updateDoc(doc(owner(), 'logs/l1'), { message: 'y' }));
+    await assertFails(deleteDoc(doc(owner(), 'logs/l1')));
+    await assertFails(setDoc(doc(owner(), 'metrics/x'), { source: 'console' }));
   });
 });

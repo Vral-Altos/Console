@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -50,16 +51,21 @@ class ConsoleRepository {
       })
       ..set(_messages.doc(), _queued(ref.id, text, 'turn'));
     await batch.commit();
+    unawaited(_audit('Started a conversation with $agent', {'threadId': ref.id, 'agent': agent}));
     return ref.id;
   }
 
-  Future<void> send(String threadId, String text) =>
-      _messages.doc().set(_queued(threadId, text, 'turn'));
+  Future<void> send(String threadId, String text) async {
+    await _messages.doc().set(_queued(threadId, text, 'turn'));
+    unawaited(_audit('Sent a message', {'threadId': threadId, 'chars': text.length}));
+  }
 
   /// Asks the agent to close the task: it writes a journal entry, and the
   /// thread is marked closed.
-  Future<void> close(String threadId) =>
-      _messages.doc().set(_queued(threadId, 'Close this conversation.', 'close'));
+  Future<void> close(String threadId) async {
+    await _messages.doc().set(_queued(threadId, 'Close this conversation.', 'close'));
+    unawaited(_audit('Closed a conversation', {'threadId': threadId}));
+  }
 
   Map<String, Object?> _queued(String threadId, String text, String kind) => {
     'threadId': threadId,
@@ -73,27 +79,40 @@ class ConsoleRepository {
   Future<void> rename(String threadId, String title) {
     final t = title.replaceAll(RegExp(r'\s+'), ' ').trim();
     if (t.isEmpty) throw ArgumentError('A title cannot be empty.');
-    return _threads.doc(threadId).update({'title': t.length <= 200 ? t : t.substring(0, 200)});
+    return _threads.doc(threadId).update({'title': t.length <= 200 ? t : t.substring(0, 200)}).then(
+      (_) => unawaited(_audit('Renamed a conversation', {'threadId': threadId, 'title': t})),
+    );
   }
 
-  Future<void> setPinned(String threadId, bool pinned) => _threads.doc(threadId).update({'pinned': pinned});
+  Future<void> setPinned(String threadId, bool pinned) async {
+    await _threads.doc(threadId).update({'pinned': pinned});
+    unawaited(_audit(pinned ? 'Pinned a conversation' : 'Unpinned a conversation', {'threadId': threadId}));
+  }
 
-  Future<void> setArchived(String threadId, bool archived) =>
-      _threads.doc(threadId).update({'archived': archived});
+  Future<void> setArchived(String threadId, bool archived) async {
+    await _threads.doc(threadId).update({'archived': archived});
+    unawaited(_audit(archived ? 'Archived a conversation' : 'Unarchived a conversation', {'threadId': threadId}));
+  }
 
   /// Stops a message: a queued one is cancelled outright (no worker has it
   /// yet); a running one is asked to stop, and its worker stops the turn,
   /// keeping what it wrote.
-  Future<void> stop(String messageId) => _db.runTransaction((tx) async {
-    final ref = _messages.doc(messageId);
-    final snap = await tx.get(ref);
-    switch (snap.data()?['status']) {
-      case 'queued':
-        tx.update(ref, {'status': 'cancelled'});
-      case 'running':
-        tx.update(ref, {'cancelRequested': true});
-    }
-  });
+  Future<void> stop(String messageId) async {
+    final what = await _db.runTransaction((tx) async {
+      final ref = _messages.doc(messageId);
+      final snap = await tx.get(ref);
+      switch (snap.data()?['status']) {
+        case 'queued':
+          tx.update(ref, {'status': 'cancelled'});
+          return 'Cancelled a queued message';
+        case 'running':
+          tx.update(ref, {'cancelRequested': true});
+          return 'Stopped a running turn';
+      }
+      return null;
+    });
+    if (what != null) unawaited(_audit(what, {'messageId': messageId}));
+  }
 
   Stream<HostStatus?> hostStatus(String host) => _db
       .doc('status/$host')
@@ -186,7 +205,12 @@ class ConsoleRepository {
     },
     'status': 'queued',
     'createdAt': FieldValue.serverTimestamp(),
-  });
+  }).then((_) => unawaited(_audit('Requested Factory $action of $devstationId', {
+    'action': action,
+    'devstation': devstationId,
+    'project': ?project,
+    'machineType': ?machineType,
+  })));
 
   Stream<List<Approval>> approvals() => _db
       .collection('approvals')
@@ -206,11 +230,76 @@ class ConsoleRepository {
               ),
           ]);
 
-  Future<void> decide(String approvalId, {required bool approve}) =>
-      _db.doc('approvals/$approvalId').update({
-        'status': approve ? 'approved' : 'rejected',
-        'decidedAt': FieldValue.serverTimestamp(),
+  Future<void> decide(String approvalId, {required bool approve}) async {
+    await _db.doc('approvals/$approvalId').update({
+      'status': approve ? 'approved' : 'rejected',
+      'decidedAt': FieldValue.serverTimestamp(),
+    });
+    unawaited(_audit(approve ? 'Approved a request' : 'Rejected a request', {'approvalId': approvalId}));
+  }
+
+  // ------------------------------------------------------------- telemetry
+
+  /// Log entries, newest first, between [from] and [to] (open: now), at most
+  /// [limit]. [source] and [severities] filter on the server (indexed);
+  /// [components] selects e.g. the Activity tab's `audit` and `lifecycle`.
+  Stream<List<LogEntry>> logs({
+    required DateTime from,
+    DateTime? to,
+    String? source,
+    List<String>? severities,
+    List<String>? components,
+    int limit = 200,
+  }) {
+    Query<Map<String, dynamic>> q = _db.collection('logs');
+    if (source != null) q = q.where('source', isEqualTo: source);
+    if (severities != null && severities.isNotEmpty) q = q.where('severity', whereIn: severities);
+    if (components != null && components.isNotEmpty) q = q.where('component', whereIn: components);
+    q = q.where('at', isGreaterThanOrEqualTo: Timestamp.fromDate(from));
+    if (to != null) q = q.where('at', isLessThanOrEqualTo: Timestamp.fromDate(to));
+    return q
+        .orderBy('at', descending: true)
+        .limit(limit)
+        .snapshots()
+        .map((s) => [for (final d in s.docs) ?logFrom(d.id, d.data())]);
+  }
+
+  /// Every source's metric hours since [from].
+  Stream<List<MetricHour>> metrics({required DateTime from}) => _db
+      .collection('metrics')
+      .where('hour', isGreaterThanOrEqualTo: Timestamp.fromDate(DateTime.utc(from.year, from.month, from.day, from.hour)))
+      .snapshots()
+      .map((s) => [for (final d in s.docs) ?metricFrom(d.data())]);
+
+  /// Writes a Console entry (`source: console`): `audit` for what the
+  /// operator did, `client` for errors in the Console itself. Best effort.
+  Future<void> writeLog(String component, LogSeverity severity, String message, [Map<String, Object?> fields = const {}]) async {
+    try {
+      final now = DateTime.now();
+      await _db.collection('logs').add({
+        'at': FieldValue.serverTimestamp(),
+        'source': 'console',
+        'component': component,
+        'severity': severity.name,
+        'message': message.length <= 2000 ? message : '${message.substring(0, 1999)}…',
+        if (fields.isNotEmpty)
+          'fields': {
+            for (final e in fields.entries.take(20))
+              e.key: switch (e.value) {
+                String v => v.length <= 1000 ? v : '${v.substring(0, 999)}…',
+                num() || bool() || null => e.value,
+                _ => '${e.value}',
+              },
+          },
+        'expireAt': Timestamp.fromDate(now.add(const Duration(days: 14))),
       });
+    } catch (_) {
+      // The audit trail never blocks or fails an action.
+    }
+  }
+
+  Future<void> _audit(String message, [Map<String, Object?> fields = const {}]) =>
+      writeLog('audit', LogSeverity.info, message, fields);
 
   static String titleFor(String text) {
     final one = text.replaceAll(RegExp(r'\s+'), ' ').trim();
@@ -421,5 +510,43 @@ MeshView meshFrom(Map<String, dynamic> d) {
         ),
     ],
     updatedAt: _time(d['updatedAt']),
+  );
+}
+
+double? _num(Object? v) => v is num ? v.toDouble() : null;
+
+LogEntry? logFrom(String id, Map<String, dynamic> d) {
+  final at = _time(d['at']);
+  if (at == null) return null; // a Console entry whose server time is pending
+  return LogEntry(
+    id: id,
+    at: at,
+    source: d['source'] as String? ?? '?',
+    component: d['component'] as String? ?? '',
+    severity: LogSeverity.values.asNameMap()[d['severity']] ?? LogSeverity.info,
+    message: d['message'] as String? ?? '',
+    host: d['host'] as String?,
+    fields: {
+      for (final e in ((d['fields'] as Map?) ?? const {}).entries)
+        '${e.key}': switch (e.value) { Timestamp t => t.toDate(), final v => v },
+    },
+  );
+}
+
+MetricHour? metricFrom(Map<String, dynamic> d) {
+  final hour = _time(d['hour']);
+  if (hour == null) return null;
+  Map<String, double> numbers(Object? m) => {
+    for (final e in ((m as Map?) ?? const {}).entries)
+      if (_num(e.value) != null) '${e.key}': _num(e.value)!,
+  };
+  return MetricHour(
+    source: d['source'] as String? ?? '?',
+    hour: hour,
+    totals: numbers(d['h']),
+    minutes: {
+      for (final e in ((d['m'] as Map?) ?? const {}).entries)
+        if (int.tryParse('${e.key}'.replaceFirst('m', '')) case final int minute) minute: numbers(e.value),
+    },
   );
 }
