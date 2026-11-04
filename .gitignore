@@ -1,0 +1,11 @@
+.dart_tool/
+build/
+.env
+*.freezed.dart
+*.g.dart
+rules_tests/node_modules/
+.DS_Store
+*.iml
+.idea/
+.flutter-plugins
+.flutter-plugins-dependencies

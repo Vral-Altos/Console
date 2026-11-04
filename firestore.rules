@@ -1,0 +1,68 @@
+rules_version = '2';
+
+// Client rules for the Vral Altos *platform* database (deployed from
+// apps/console). Agents, the Mac worker, the cloud runner and Autobench use
+// IAM and are not subject to these rules. Clients get:
+// - the operator only (verified Google accounts below), nobody else;
+// - read access to the Console's data and the status the system reports;
+// - write access only to start threads and queue operator messages.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isOwner() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email in [
+          'obsidian.infinitum@gmail.com',
+          'siddharth.chitikela@gmail.com'
+        ];
+    }
+
+    function isShortString(v, max) {
+      return v is string && v.size() > 0 && v.size() <= max;
+    }
+
+    // Conversations: created by the Console, maintained by the workers.
+    match /threads/{threadId} {
+      allow read: if isOwner();
+      allow create: if isOwner()
+        && request.resource.data.keys().hasOnly(['agent', 'title', 'createdAt', 'updatedAt', 'closed'])
+        && request.resource.data.agent.matches('^[a-z0-9][a-z0-9_-]{0,40}$')
+        && isShortString(request.resource.data.title, 200)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.closed == false;
+      allow update, delete: if false;
+    }
+
+    // The mailbox: the Console only queues operator messages; replies and
+    // status changes come from the workers.
+    match /messages/{messageId} {
+      allow read: if isOwner();
+      allow create: if isOwner()
+        && request.resource.data.keys().hasOnly(['threadId', 'role', 'kind', 'text', 'status', 'createdAt'])
+        && request.resource.data.role == 'operator'
+        && request.resource.data.status == 'queued'
+        && request.resource.data.kind in ['turn', 'close']
+        && isShortString(request.resource.data.text, 20000)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.threadId is string
+        && existsAfter(/databases/$(database)/documents/threads/$(request.resource.data.threadId))
+        && getAfter(/databases/$(database)/documents/threads/$(request.resource.data.threadId)).data.closed == false;
+      allow update, delete: if false;
+    }
+
+    // Reported by the system; read-only for the Console.
+    match /status/{doc} {
+      allow read: if isOwner();
+    }
+    match /agent_mesh/{doc} {
+      allow read: if isOwner();
+    }
+    match /autobench/latest {
+      allow read: if isOwner();
+    }
+    match /devstations/{id} {
+      allow read: if isOwner();
+    }
+  }
+}
