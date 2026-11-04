@@ -3,12 +3,18 @@
 The operator's web front door to Vral Altos (Flutter web, Firebase Hosting
 site `va-console` in `vral-altos`): **https://va-console.web.app**.
 
-- **Chat** — conversations with the agents (Genie, the Counsel). Messages go
-  into the mailbox in the platform database; the Mac worker answers while the
-  Mac is on, the cloud runner otherwise (`meshes/agent_mesh`, Mailbox).
-- **Factory** — Devstations (GCE dev VMs with Claude Code), per project.
-- **Maintenance** — where agents run, Claude accounts and usage, active agent
-  sessions, tool syncs.
+- **Overview** — live activity and approvals, KPIs (turns today, chat cost,
+  GCP spend), hosts' CPU/memory/disk, active tasks, usage, Claude limits,
+  month-to-date spend, Devstations.
+- **Chat** — Claude-style conversations with the agents. Messages go into the
+  mailbox; the Mac worker (or the cloud runner, or a director's Devstation)
+  answers, streaming its progress; Stop ends a turn and keeps what it wrote.
+- **Projects** — Devstations (GCE dev VMs with Claude Code) and the Factory.
+- **System** — approvals, hosts, agent sessions, usage by host/account, syncs,
+  appearance.
+
+Shortcuts: Ctrl/⌘+K new chat, Ctrl/⌘+1…4 pages; Enter sends, Shift+Enter
+breaks the line.
 
 Only the operator's verified Google account (siddharth.chitikela@) gets in (`lib/data/firebase.dart`
 and `firestore.rules`, which must list the same accounts).
