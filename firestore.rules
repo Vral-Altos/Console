@@ -90,6 +90,12 @@ service cloud.firestore {
     match /usage_days/{day} {
       allow read: if isOwner();
     }
+    // The estate's inventory: written by the Mac worker (admin), read by
+    // the Console.
+    match /topology/{doc} {
+      allow read: if isOwner();
+      allow write: if false;
+    }
     match /billing/{doc} {
       allow read: if isOwner();
     }

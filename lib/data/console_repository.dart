@@ -158,6 +158,12 @@ class ConsoleRepository {
     (s) => {for (final d in s.docs) d.id: hostFrom(d.data())},
   );
 
+  /// The estate's inventory (`topology/current`).
+  Stream<TopologyInventory?> topology() => _db
+      .doc('topology/current')
+      .snapshots()
+      .map((d) => d.exists ? topologyFrom(d.data()!) : null);
+
   Stream<MeshView?> mesh() => _db
       .doc('agent_mesh/state')
       .snapshots()
@@ -421,6 +427,17 @@ Devstation devstationFrom(String id, Map<String, dynamic> d) => Devstation(
 HostStatus hostFrom(Map<String, dynamic> d) {
   final m = d['metrics'] as Map?;
   return HostStatus(
+    localServices: [
+      for (final x in (d['localServices'] as List? ?? const []))
+        if (x is Map && x['label'] is String)
+          LocalServiceView(
+            label: x['label'] as String,
+            running: x['running'] == true,
+            lastExit: _int(x['lastExit']),
+            connected: x['connected'] as bool?,
+            detail: x['detail'] as String?,
+          ),
+    ],
     lastSeen: _time(d['lastSeen']),
     host: d['host'] as String?,
     agents: [for (final a in d['agents'] as List? ?? const []) '$a'],
@@ -598,3 +615,58 @@ MetricHour? metricFrom(Map<String, dynamic> d) {
     },
   );
 }
+
+Map<String, String> _strings(Object? m) =>
+    m is Map ? {for (final e in m.entries) '${e.key}': '${e.value}'} : const {};
+
+TopologyInventory topologyFrom(Map<String, dynamic> d) => TopologyInventory(
+  at: _time(d['at']),
+  projects: [
+    for (final p in d['projects'] as List? ?? const [])
+      if (p is Map && p['id'] is String)
+        GcpProjectView(
+          id: p['id'] as String,
+          name: '${p['name'] ?? p['id']}',
+          number: p['number']?.toString(),
+          access: p['access'] as String? ?? 'full',
+          labels: _strings(p['labels']),
+        ),
+  ],
+  resources: [
+    for (final r in d['resources'] as List? ?? const [])
+      if (r is Map && r['id'] is String)
+        CloudResource(
+          id: r['id'] as String,
+          project: '${r['project'] ?? ''}',
+          type: '${r['type'] ?? ''}',
+          name: '${r['name'] ?? ''}',
+          location: r['location'] as String?,
+          state: r['state'] as String?,
+          public: r['public'] == true,
+          publicRoles: [for (final x in r['publicRoles'] as List? ?? const []) '$x'],
+          labels: _strings(r['labels']),
+          url: r['url'] as String?,
+          ingress: r['ingress'] as String?,
+          health: r['health'] as String?,
+          detail: r['detail'] as String?,
+          schedule: r['schedule'] as String?,
+          lastRun: _time(r['lastRun']),
+        ),
+  ],
+  repos: [
+    for (final r in d['repos'] as List? ?? const [])
+      if (r is Map && r['path'] is String)
+        RepoView(
+          name: '${r['name'] ?? r['path']}',
+          path: r['path'] as String,
+          host: (r['remote'] as Map?)?['host'] as String?,
+          owner: (r['remote'] as Map?)?['owner'] as String?,
+          repo: (r['remote'] as Map?)?['repo'] as String?,
+          branch: r['branch'] as String?,
+          lastCommit: _time(r['lastCommit']),
+          dirty: r['dirty'] == true,
+          stack: [for (final x in r['stack'] as List? ?? const []) '$x'],
+        ),
+  ],
+  errors: [for (final e in d['errors'] as List? ?? const []) '$e'],
+);

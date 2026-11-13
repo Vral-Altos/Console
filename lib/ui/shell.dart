@@ -10,6 +10,7 @@ import 'overview_page.dart';
 import 'projects_page.dart';
 import 'system_page.dart';
 import 'theme.dart';
+import 'topology/topology_page.dart';
 import 'widgets.dart';
 
 typedef _Dest = ({ConsolePage page, IconData icon, IconData selected, String label});
@@ -18,6 +19,7 @@ const _destinations = <_Dest>[
   (page: ConsolePage.overview, icon: Icons.space_dashboard_outlined, selected: Icons.space_dashboard, label: 'Overview'),
   (page: ConsolePage.chat, icon: Icons.forum_outlined, selected: Icons.forum, label: 'Chat'),
   (page: ConsolePage.projects, icon: Icons.folder_outlined, selected: Icons.folder, label: 'Projects'),
+  (page: ConsolePage.topology, icon: Icons.hub_outlined, selected: Icons.hub, label: 'Topology'),
   (page: ConsolePage.logs, icon: Icons.receipt_long_outlined, selected: Icons.receipt_long, label: 'Logs'),
   (page: ConsolePage.system, icon: Icons.tune_outlined, selected: Icons.tune, label: 'System'),
 ];
@@ -43,7 +45,7 @@ class Shell extends ConsumerWidget {
     void go(ConsolePage p) => ref.read(pageProvider.notifier).go(p);
     final body = IndexedStack(
       index: page.index,
-      children: const [OverviewPage(), ChatPage(), ProjectsPage(), LogsPage(), SystemPage()],
+      children: const [OverviewPage(), ChatPage(), ProjectsPage(), TopologyPage(), LogsPage(), SystemPage()],
     );
 
     return CallbackShortcuts(

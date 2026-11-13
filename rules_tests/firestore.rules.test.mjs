@@ -66,6 +66,7 @@ beforeEach(async () => {
     await setDoc(doc(db, 'stats/usage'), { turns: 1 });
     await setDoc(doc(db, 'usage_days/2026-11-04'), { turns: 1 });
     await setDoc(doc(db, 'billing/current'), { costAmount: 1 });
+    await setDoc(doc(db, 'topology/current'), { resources: [] });
     await setDoc(doc(db, 'logs/l1'), { source: 'mac-worker', message: 'x' });
     await setDoc(doc(db, 'metrics/mac-worker~2026110410'), { source: 'mac-worker' });
   });
@@ -73,7 +74,7 @@ beforeEach(async () => {
 
 describe('reads', () => {
   const readable = ['threads/t1', 'messages/m1', 'status/mac', 'agent_mesh/state', 'autobench/latest', 'devstations/d1',
-    'stats/usage', 'usage_days/2026-11-04', 'billing/current', 'logs/l1', 'metrics/mac-worker~2026110410'];
+    'stats/usage', 'usage_days/2026-11-04', 'billing/current', 'topology/current', 'logs/l1', 'metrics/mac-worker~2026110410'];
 
   test('the operator reads the Console data', async () => {
     for (const path of readable) {
@@ -192,6 +193,7 @@ describe('messages', () => {
     await assertFails(setDoc(doc(owner(), 'stats/usage'), { turns: 0 }));
     await assertFails(setDoc(doc(owner(), 'usage_days/2026-11-05'), { turns: 0 }));
     await assertFails(setDoc(doc(owner(), 'billing/current'), { costAmount: 0 }));
+    await assertFails(setDoc(doc(owner(), 'topology/current'), { resources: [] }));
   });
 });
 

@@ -13,6 +13,19 @@ site `va-console` in `vral-altos`): **https://va-console.web.app**.
   they upload to the attachments bucket under `storage.rules`. `@` mentions a
   conversation, project or agent, and the agent gets its context.
 - **Projects** — Devstations (GCE dev VMs with Claude Code) and the Factory.
+- **Topology** — everything Vral Altos and your other projects are made of,
+  on one interactive isometric map: every GCP project you can see (Cloud
+  Asset Inventory: services, databases, buckets, secrets, queues, jobs, VMs,
+  identities; public IAM bindings; Cloud Run and Scheduler health; Hosting
+  sites), the Mac and its launchd services, the High Counsel, Devstations,
+  the repos on the Mac (owner from the git remote) and the third parties they
+  reach. Districts by project, boundary or owner; fences inside them are the
+  security boundaries (public edge, cloud internal, private network, agent
+  sandboxes, your premises, third parties). Hover for a readout (health,
+  security, owner, facts, links); click to pin, double-click to zoom; search +
+  Enter flies to an entity; Q/E or the buttons rotate, scroll/pinch zooms.
+  Data: `topology/current`, kept by the Mac worker every 15 min with your own
+  Google login (`va_agent topology` runs it once), plus live host status.
 - **Logs** — Logs Explorer, Monitoring and Activity over every service's
   telemetry (`docs/architecture.md`, Telemetry) and your own audit trail.
 - **System** — approvals, hosts, agent sessions, usage by host/account, syncs,

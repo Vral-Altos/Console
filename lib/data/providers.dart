@@ -44,6 +44,7 @@ final macStatusProvider = StreamProvider<HostStatus?>((ref) => _repo(ref).hostSt
 final cloudStatusProvider = StreamProvider<HostStatus?>((ref) => _repo(ref).hostStatus('cloud'));
 final allStatusProvider = StreamProvider<Map<String, HostStatus>>((ref) => _repo(ref).allStatus());
 final meshProvider = StreamProvider<MeshView?>((ref) => _repo(ref).mesh());
+final topologyProvider = StreamProvider<TopologyInventory?>((ref) => _repo(ref).topology());
 final portfolioSyncProvider = StreamProvider<PortfolioSync?>((ref) => _repo(ref).portfolioSync());
 final usageStatsProvider = StreamProvider<UsageStats?>((ref) => _repo(ref).usageStats());
 final usageDaysProvider = StreamProvider<List<UsageDay>>((ref) => _repo(ref).usageDays());
@@ -87,7 +88,7 @@ final agentsProvider = Provider<List<({String name, String? description})>>((ref
 });
 
 /// The Console's pages.
-enum ConsolePage { overview, chat, projects, logs, system }
+enum ConsolePage { overview, chat, projects, topology, logs, system }
 
 final pageProvider = NotifierProvider<PageNotifier, ConsolePage>(PageNotifier.new);
 

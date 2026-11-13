@@ -134,7 +134,87 @@ abstract class HostStatus with _$HostStatus {
     String? devstation,
     HostMetricsView? metrics,
     @Default(<MetricPoint>[]) List<MetricPoint> history,
+
+    /// The Mac's own services (launchd jobs `com.vralaltos.*`).
+    @Default(<LocalServiceView>[]) List<LocalServiceView> localServices,
   }) = _HostStatus;
+}
+
+/// One of the Mac's launchd services; [connected] for a Skyhorse bridge.
+@freezed
+abstract class LocalServiceView with _$LocalServiceView {
+  const factory LocalServiceView({
+    required String label,
+    required bool running,
+    int? lastExit,
+    bool? connected,
+    String? detail,
+  }) = _LocalServiceView;
+}
+
+/// Everything Vral Altos and the operator's other projects are made of
+/// (`topology/current`, kept by the Mac worker).
+@freezed
+abstract class TopologyInventory with _$TopologyInventory {
+  const factory TopologyInventory({
+    DateTime? at,
+    @Default(<GcpProjectView>[]) List<GcpProjectView> projects,
+    @Default(<CloudResource>[]) List<CloudResource> resources,
+    @Default(<RepoView>[]) List<RepoView> repos,
+    @Default(<String>[]) List<String> errors,
+  }) = _TopologyInventory;
+}
+
+@freezed
+abstract class GcpProjectView with _$GcpProjectView {
+  const factory GcpProjectView({
+    required String id,
+    required String name,
+    String? number,
+
+    /// `full`, or `limited` when the operator can see but not read it.
+    @Default('full') String access,
+    @Default(<String, String>{}) Map<String, String> labels,
+  }) = _GcpProjectView;
+}
+
+/// A cloud resource; [health] is `ok`/`warn`/`bad`/`idle` or null when
+/// Google reports none.
+@freezed
+abstract class CloudResource with _$CloudResource {
+  const factory CloudResource({
+    required String id,
+    required String project,
+    required String type,
+    required String name,
+    String? location,
+    String? state,
+    @Default(false) bool public,
+    @Default(<String>[]) List<String> publicRoles,
+    @Default(<String, String>{}) Map<String, String> labels,
+    String? url,
+    String? ingress,
+    String? health,
+    String? detail,
+    String? schedule,
+    DateTime? lastRun,
+  }) = _CloudResource;
+}
+
+/// A git checkout on the Mac.
+@freezed
+abstract class RepoView with _$RepoView {
+  const factory RepoView({
+    required String name,
+    required String path,
+    String? host,
+    String? owner,
+    String? repo,
+    String? branch,
+    DateTime? lastCommit,
+    @Default(false) bool dirty,
+    @Default(<String>[]) List<String> stack,
+  }) = _RepoView;
 }
 
 @freezed
