@@ -323,6 +323,67 @@ abstract class BillingView with _$BillingView {
   }) = _BillingView;
 }
 
+/// Cost by project, service and SKU from the Cloud Billing export
+/// (`billing/breakdown`, kept by the cloud runner). Months are invoice
+/// months (`yyyy-mm`); amounts are net of credits, in [currency].
+@freezed
+abstract class BillingBreakdown with _$BillingBreakdown {
+  const factory BillingBreakdown({
+    /// `ok`, `no-export` (not switched on) or `empty` (on, nothing landed).
+    required String status,
+    DateTime? at,
+    DateTime? exportedAt,
+    String? dataset,
+    String? table,
+    String? currency,
+    String? month,
+    String? previousMonth,
+    @Default(0) double total,
+    @Default(0) double cost,
+    @Default(0) double credits,
+    @Default(0) double previousTotal,
+    @Default(<BillingProject>[]) List<BillingProject> projects,
+    @Default(<BillingService>[]) List<BillingService> services,
+    @Default(<BillingSku>[]) List<BillingSku> skus,
+
+    /// Operator day (`yyyy-mm-dd`) → project id (`~account` for
+    /// account-level charges) → net cost that day.
+    @Default(<String, Map<String, double>>{}) Map<String, Map<String, double>> days,
+  }) = _BillingBreakdown;
+}
+
+@freezed
+abstract class BillingProject with _$BillingProject {
+  const factory BillingProject({
+    required String id,
+    required String name,
+    @Default(0) double net,
+    @Default(0) double cost,
+    @Default(0) double credits,
+    @Default(0) double previous,
+  }) = _BillingProject;
+}
+
+@freezed
+abstract class BillingService with _$BillingService {
+  const factory BillingService({
+    required String name,
+    @Default(0) double net,
+    @Default(0) double previous,
+    @Default(<String, double>{}) Map<String, double> projects,
+  }) = _BillingService;
+}
+
+@freezed
+abstract class BillingSku with _$BillingSku {
+  const factory BillingSku({
+    required String service,
+    required String sku,
+    required String project,
+    @Default(0) double net,
+  }) = _BillingSku;
+}
+
 /// A Devstation (`devstations/{id}`), written by the Factory's provisioning.
 @freezed
 abstract class Devstation with _$Devstation {

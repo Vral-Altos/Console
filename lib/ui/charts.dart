@@ -424,6 +424,7 @@ class _TimeChartState extends State<TimeChart> {
   String _time(BuildContext context, DateTime t) {
     final l = t.toLocal();
     final hm = TimeOfDay.fromDateTime(l).format(context);
+    if (widget.bucket >= const Duration(days: 1)) return '${l.day}/${l.month}';
     return widget.bucket >= const Duration(hours: 4) || DateTime.now().difference(t) > const Duration(hours: 24)
         ? '${l.day}/${l.month} $hm'
         : hm;

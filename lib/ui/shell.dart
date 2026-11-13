@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/models.dart';
 import '../data/providers.dart';
+import 'billing_page.dart';
 import 'chat/chat_page.dart';
 import 'logs_page.dart';
 import 'overview_page.dart';
@@ -20,12 +21,13 @@ const _destinations = <_Dest>[
   (page: ConsolePage.chat, icon: Icons.forum_outlined, selected: Icons.forum, label: 'Chat'),
   (page: ConsolePage.projects, icon: Icons.folder_outlined, selected: Icons.folder, label: 'Projects'),
   (page: ConsolePage.topology, icon: Icons.hub_outlined, selected: Icons.hub, label: 'Topology'),
+  (page: ConsolePage.billing, icon: Icons.payments_outlined, selected: Icons.payments, label: 'Billing'),
   (page: ConsolePage.logs, icon: Icons.receipt_long_outlined, selected: Icons.receipt_long, label: 'Logs'),
   (page: ConsolePage.system, icon: Icons.tune_outlined, selected: Icons.tune, label: 'System'),
 ];
 
 /// The Console's frame: a sidebar on wide screens, a bottom bar on phones.
-/// Ctrl/⌘+K starts a new chat; Ctrl/⌘+1…5 switch pages.
+/// Ctrl/⌘+K starts a new chat; Ctrl/⌘+1…7 switch pages.
 class Shell extends ConsumerWidget {
   const Shell({super.key});
 
@@ -45,7 +47,7 @@ class Shell extends ConsumerWidget {
     void go(ConsolePage p) => ref.read(pageProvider.notifier).go(p);
     final body = IndexedStack(
       index: page.index,
-      children: const [OverviewPage(), ChatPage(), ProjectsPage(), TopologyPage(), LogsPage(), SystemPage()],
+      children: const [OverviewPage(), ChatPage(), ProjectsPage(), TopologyPage(), BillingPage(), LogsPage(), SystemPage()],
     );
 
     return CallbackShortcuts(
@@ -76,7 +78,9 @@ class Shell extends ConsumerWidget {
                   child: NavigationBar(
                     selectedIndex: page.index,
                     onDestinationSelected: (i) => go(ConsolePage.values[i]),
-                    labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+                    labelBehavior: size.width < 520
+                        ? NavigationDestinationLabelBehavior.onlyShowSelected
+                        : NavigationDestinationLabelBehavior.alwaysShow,
                     destinations: [
                       for (final d in _destinations)
                         NavigationDestination(

@@ -698,6 +698,7 @@ class SpendPanel extends ConsumerWidget {
       title: 'GCP spend',
       subtitle: 'Month to date, from the Vral Altos budget',
       icon: Icons.payments_outlined,
+      trailing: TextButton(onPressed: () => ref.read(pageProvider.notifier).go(ConsolePage.billing), child: const Text('Breakdown')),
       child: AsyncView(
         value: ref.watch(billingProvider),
         data: (b) {

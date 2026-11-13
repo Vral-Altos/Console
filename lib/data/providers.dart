@@ -49,6 +49,7 @@ final portfolioSyncProvider = StreamProvider<PortfolioSync?>((ref) => _repo(ref)
 final usageStatsProvider = StreamProvider<UsageStats?>((ref) => _repo(ref).usageStats());
 final usageDaysProvider = StreamProvider<List<UsageDay>>((ref) => _repo(ref).usageDays());
 final billingProvider = StreamProvider<BillingView?>((ref) => _repo(ref).billing());
+final billingBreakdownProvider = StreamProvider<BillingBreakdown?>((ref) => _repo(ref).billingBreakdown());
 final devstationsProvider = StreamProvider<List<Devstation>>((ref) => _repo(ref).devstations());
 final factoryRequestsProvider =
     StreamProvider<List<FactoryRequest>>((ref) => _repo(ref).factoryRequests());
@@ -88,7 +89,7 @@ final agentsProvider = Provider<List<({String name, String? description})>>((ref
 });
 
 /// The Console's pages.
-enum ConsolePage { overview, chat, projects, topology, logs, system }
+enum ConsolePage { overview, chat, projects, topology, billing, logs, system }
 
 final pageProvider = NotifierProvider<PageNotifier, ConsolePage>(PageNotifier.new);
 

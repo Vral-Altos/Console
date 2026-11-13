@@ -8,6 +8,7 @@ import 'package:va_console/data/attachments.dart';
 import 'package:va_console/data/models.dart';
 import 'package:va_console/data/providers.dart';
 import 'package:va_console/ui/app.dart';
+import 'package:va_console/ui/billing_page.dart';
 import 'package:va_console/ui/chat/chat_page.dart';
 import 'package:va_console/ui/chat/code_highlight.dart';
 import 'package:va_console/ui/chat/composer.dart';
@@ -60,6 +61,7 @@ List overridesWith({
   UsageStats? stats,
   List<UsageDay> days = const [],
   BillingView? billing,
+  BillingBreakdown? breakdown,
   List<Devstation> devstations = const [],
   List<FactoryRequest> requests = const [],
   List<Approval> approvals = const [],
@@ -77,6 +79,7 @@ List overridesWith({
     usageStatsProvider.overrideWith((ref) => Stream.value(stats)),
     usageDaysProvider.overrideWith((ref) => Stream.value(days)),
     billingProvider.overrideWith((ref) => Stream.value(billing)),
+    billingBreakdownProvider.overrideWith((ref) => Stream.value(breakdown)),
     devstationsProvider.overrideWith((ref) => Stream.value(devstations)),
     factoryRequestsProvider.overrideWith((ref) => Stream.value(requests)),
     approvalsProvider.overrideWith((ref) => Stream.value(approvals)),
@@ -87,6 +90,38 @@ List overridesWith({
     metricsProvider.overrideWith((ref, from) => Stream.value(metrics)),
   ];
 }
+
+/// A month of the billing export: two projects, credits, last month.
+BillingBreakdown breakdown() => BillingBreakdown(
+  status: 'ok',
+  at: now,
+  exportedAt: now.subtract(const Duration(hours: 2)),
+  dataset: 'vral-altos.va_billing',
+  table: 'gcp_billing_export_v1_X',
+  currency: 'SGD',
+  month: '2026-11',
+  previousMonth: '2026-10',
+  total: 4.25,
+  cost: 4.75,
+  credits: -.5,
+  previousTotal: 8.5,
+  projects: const [
+    BillingProject(id: 'cortado-ide', name: 'cortado-ide', net: 3, cost: 3, previous: 2),
+    BillingProject(id: 'vral-altos', name: 'Vral Altos', net: 1.25, cost: 1.75, credits: -.5, previous: 6.5),
+  ],
+  services: const [
+    BillingService(name: 'Cloud Run', net: 3.5, previous: 7, projects: {'cortado-ide': 3, 'vral-altos': .5}),
+    BillingService(name: 'Cloud Storage', net: .75, previous: 1.5, projects: {'vral-altos': .75}),
+  ],
+  skus: const [
+    BillingSku(service: 'Cloud Run', sku: 'Memory allocation time', project: 'cortado-ide', net: 3),
+    BillingSku(service: 'Cloud Storage', sku: 'Standard Storage Singapore', project: 'vral-altos', net: .75),
+  ],
+  days: {
+    today: const {'cortado-ide': 1, 'vral-altos': .25, '~account': .05},
+    operatorDay(now.subtract(const Duration(days: 1))): const {'cortado-ide': 2},
+  },
+);
 
 /// Test-mode attachments: uploads complete when [release] is called.
 class MemoryStore implements AttachmentStore {
@@ -399,13 +434,14 @@ void main() {
         threads: const [ChatThread(id: 't1', agent: 'genie', title: 'A rather long conversation title that must ellipsize')],
         devstations: const [Devstation(id: 'atlas', project: 'Atlas', state: 'running', desired: 'running', machineType: 'e2-standard-2')],
         billing: BillingView(costAmount: 2.5, budgetAmount: 30, currencyCode: 'SGD', updatedAt: now, days: {today: 2.5}),
+        breakdown: breakdown(),
         days: [UsageDay(day: today, turns: 3)],
         stats: const UsageStats(turns: 3, byAgent: {'genie': UsageSlice(turns: 3)}, byPlacement: {'mac': UsageSlice(turns: 3)}),
         mesh: MeshView(sessions: [
           SessionView(sessionId: 's', agent: 'genie', taskId: 'console-t1', accountId: 'mac', status: 'active', contextTokens: 900, turns: 2, compactions: 0, lastUsedAt: now),
         ]),
       );
-      for (final page in [const OverviewPage(), const ProjectsPage(), const SystemPage(), const ChatPage(), const LogsPage()]) {
+      for (final page in [const OverviewPage(), const ProjectsPage(), const BillingPage(), const SystemPage(), const ChatPage(), const LogsPage()]) {
         await tester.pumpWidget(host(page, [
           ...o,
           messagesProvider('t1').overrideWith((ref) => Stream.value([
@@ -418,6 +454,55 @@ void main() {
       }
     });
   }
+
+  testWidgets('billing: totals, pace, projects narrow services and SKUs', (tester) async {
+    size(tester, const Size(1400, 2200));
+    await tester.pumpWidget(host(const BillingPage(), overridesWith(breakdown: breakdown())));
+    await tester.pump();
+    expect(find.text(r'S$4.25'), findsOneWidget, reason: 'this month, net');
+    expect(find.textContaining(r'S$4.75 before S$0.50 credits'), findsOneWidget);
+    expect(find.text(r'S$8.50'), findsOneWidget, reason: 'last month');
+    expect(find.textContaining('this month so far is 50% of it'), findsOneWidget);
+    expect(find.text('Daily cost'), findsOneWidget);
+    expect(find.text('Memory allocation time'), findsOneWidget);
+    expect(find.text('Standard Storage Singapore'), findsOneWidget);
+    expect(find.textContaining('Exported by Google 2 h ago'), findsOneWidget);
+
+    // Narrow to Vral Altos: its services and SKUs only.
+    await tester.tap(find.bySemanticsLabel(RegExp('^Project Vral Altos:')));
+    await tester.pumpAndSettle();
+    expect(find.text('Memory allocation time'), findsNothing);
+    expect(find.text('Standard Storage Singapore'), findsOneWidget);
+    expect(find.text(r'S$0.50'), findsWidgets, reason: 'Cloud Run in Vral Altos');
+    expect(find.textContaining('Showing Vral Altos below'), findsOneWidget);
+    await tester.tap(find.bySemanticsLabel(RegExp('^Project Vral Altos:')));
+    await tester.pumpAndSettle();
+    expect(find.text('Memory allocation time'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('billing without the export says how to switch it on, and shows the budget', (tester) async {
+    size(tester, const Size(1200, 1400));
+    await tester.pumpWidget(host(const BillingPage(), overridesWith(
+      breakdown: BillingBreakdown(status: 'no-export', at: now, dataset: 'vral-altos.va_billing'),
+      billing: BillingView(costAmount: 2.5, currencyCode: 'SGD', updatedAt: now),
+    )));
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('Switch on the billing export'), findsOneWidget);
+    expect(find.textContaining('dataset va_billing'), findsOneWidget);
+    expect(find.text(r'S$2.50'), findsOneWidget);
+    expect(find.text('Daily cost'), findsNothing, reason: 'no numbers are invented');
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpWidget(host(const BillingPage(), overridesWith(breakdown: BillingBreakdown(status: 'empty', at: now, table: 'gcp_billing_export_v1_X'))));
+    await tester.pump();
+    expect(find.text('Waiting for the first export'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpWidget(host(const BillingPage(), overridesWith()));
+    await tester.pump();
+    expect(find.text('Switch on the billing export'), findsOneWidget, reason: 'nothing recorded yet');
+  });
 
   testWidgets('before data arrives the overview says loading, not zero or "never seen"', (tester) async {
     size(tester, const Size(1400, 2600));

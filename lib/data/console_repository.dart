@@ -158,6 +158,12 @@ class ConsoleRepository {
     (s) => {for (final d in s.docs) d.id: hostFrom(d.data())},
   );
 
+  /// Cost breakdowns from the billing export (`billing/breakdown`).
+  Stream<BillingBreakdown?> billingBreakdown() => _db
+      .doc('billing/breakdown')
+      .snapshots()
+      .map((d) => d.exists ? billingBreakdownFrom(d.data()!) : null);
+
   /// The estate's inventory (`topology/current`).
   Stream<TopologyInventory?> topology() => _db
       .doc('topology/current')
@@ -519,6 +525,52 @@ BillingView? billingFrom(Map<String, dynamic> d) {
     days: {
       for (final e in ((d['days'] as Map?) ?? const {}).entries)
         if (e.value is num) '${e.key}': (e.value as num).toDouble(),
+    },
+  );
+}
+
+BillingBreakdown billingBreakdownFrom(Map<String, dynamic> d) {
+  double n(Object? v) => _double(v) ?? 0;
+  List<Map<String, dynamic>> list(Object? v) => [for (final x in (v as List? ?? const [])) if (x is Map) x.cast<String, dynamic>()];
+  Map<String, double> amounts(Object? v) => {
+    for (final e in ((v as Map?) ?? const {}).entries)
+      if (e.value is num) '${e.key}': (e.value as num).toDouble(),
+  };
+  return BillingBreakdown(
+    status: d['status'] as String? ?? 'no-export',
+    at: _time(d['at']),
+    exportedAt: _time(d['exportedAt']),
+    dataset: d['dataset'] as String?,
+    table: d['table'] as String?,
+    currency: d['currency'] as String?,
+    month: d['month'] as String?,
+    previousMonth: d['previousMonth'] as String?,
+    total: n(d['total']),
+    cost: n(d['cost']),
+    credits: n(d['credits']),
+    previousTotal: n(d['previousTotal']),
+    projects: [
+      for (final p in list(d['projects']))
+        BillingProject(
+          id: p['id'] as String? ?? '',
+          name: p['name'] as String? ?? '',
+          net: n(p['net']),
+          cost: n(p['cost']),
+          credits: n(p['credits']),
+          previous: n(p['previous']),
+        ),
+    ],
+    services: [
+      for (final s in list(d['services']))
+        BillingService(name: s['name'] as String? ?? '', net: n(s['net']), previous: n(s['previous']), projects: amounts(s['projects'])),
+    ],
+    skus: [
+      for (final k in list(d['skus']))
+        BillingSku(service: k['service'] as String? ?? '', sku: k['sku'] as String? ?? '', project: k['project'] as String? ?? '', net: n(k['net'])),
+    ],
+    days: {
+      for (final e in ((d['days'] as Map?) ?? const {}).entries)
+        if (e.value is Map) '${e.key}': amounts(e.value),
     },
   );
 }

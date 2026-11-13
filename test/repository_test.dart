@@ -213,6 +213,35 @@ void main() {
     expect(billingFrom({'month': '2026-11'}), isNull);
   });
 
+  test('the billing breakdown as the runner writes it', () {
+    final b = billingBreakdownFrom({
+      'status': 'ok',
+      'currency': 'SGD',
+      'month': '2026-11',
+      'total': 4,
+      'previousTotal': 8.5,
+      'projects': [
+        {'id': 'vral-altos', 'name': 'Vral Altos', 'net': 1.25, 'cost': 1.75, 'credits': -0.5, 'previous': 6},
+      ],
+      'services': [
+        {'name': 'Cloud Run', 'net': 3, 'previous': 7, 'projects': {'vral-altos': 0.5, 'cortado-ide': 2.5}},
+      ],
+      'skus': [
+        {'service': 'Cloud Run', 'sku': 'CPU', 'project': 'cortado-ide', 'net': 2},
+      ],
+      'days': {
+        '2026-11-12': {'vral-altos': 0.25, '~account': 0.05},
+        'bad': 3,
+      },
+    });
+    expect((b.total, b.previousTotal, b.currency), (4.0, 8.5, 'SGD'));
+    expect(b.projects.single.credits, -.5);
+    expect(b.services.single.projects, {'vral-altos': .5, 'cortado-ide': 2.5});
+    expect(b.skus.single.project, 'cortado-ide');
+    expect(b.days, {'2026-11-12': {'vral-altos': .25, '~account': .05}});
+    expect(billingBreakdownFrom({'status': 'no-export'}).projects, isEmpty);
+  });
+
   test('the operator day is Singapore time', () {
     expect(operatorDay(DateTime.utc(2026, 11, 4, 15, 59)), '2026-11-04');
     expect(operatorDay(DateTime.utc(2026, 11, 4, 16)), '2026-11-05');
