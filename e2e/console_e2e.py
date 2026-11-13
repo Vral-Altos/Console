@@ -1,6 +1,6 @@
 """Console E2E on emulators with a real Mac worker (README, "End-to-end test"):
-sign-in gate, Overview live data, a chat that streams and finishes, stopping a
-turn, rename / pin, attachments (picked and dropped) and @mentions read by
+sign-in gate, Overview live data, a chat that streams and finishes, tool use
+folded to a line and highlighted code, stopping a turn with Esc, rename / pin, attachments (picked and dropped) and @mentions read by
 the agent, Projects and System, phone layout, both themes."""
 import re, struct, sys, zlib
 from playwright.sync_api import sync_playwright, expect
@@ -92,6 +92,20 @@ with sync_playwright() as pw:
     page.screenshot(path=f'{OUT}/3-reply.png')
     print('chat reply: ok')
 
+    # 3b. Tool use folds to one line that opens; code arrives highlighted.
+    type_and_send(page, re.compile('Reply to Genie'),
+                  'E2E: use the Read tool once to read your CLAUDE.md, then reply with only a 3-line Python code block '
+                  'that prints the numbers 1 to 3. No other text.')
+    used = seen(page, re.compile(r'^Used (Read|\d+ tools)'))
+    expect(used).to_be_visible(timeout=240000)
+    expect(page.get_by_role('button', name=re.compile('^Copy$')).first).to_be_visible()
+    page.wait_for_timeout(800)
+    page.screenshot(path=f'{OUT}/3b-code.png')
+    used.click()
+    expect(seen(page, re.compile(r'^Read( ×\d+)?$'))).to_be_visible(timeout=5000)
+    page.screenshot(path=f'{OUT}/3c-tools-open.png')
+    print('tools and code: ok')
+
     # 4. Stopping a long turn keeps what it wrote (or notes it stopped early).
     type_and_send(page, re.compile('Reply to Genie'), 'E2E: write a 900-word essay about lighthouses, in plain paragraphs.')
     stop = page.get_by_role('button', name='Stop', exact=True)
@@ -99,7 +113,9 @@ with sync_playwright() as pw:
     expect(seen(page, re.compile('Writing|Thinking'))).to_be_visible(timeout=120000)
     page.wait_for_timeout(4000)
     page.screenshot(path=f'{OUT}/4-streaming.png')
-    stop.last.click()
+    # Esc in the message box stops the turn.
+    page.get_by_role('textbox', name=re.compile('Reply to Genie')).click()
+    page.keyboard.press('Escape')
     expect(seen(page, re.compile('Stopped'))).to_be_visible(timeout=60000)
     page.screenshot(path=f'{OUT}/5-stopped.png')
     print('stop: ok')
@@ -126,7 +142,8 @@ with sync_playwright() as pw:
     page.get_by_role('button', name=re.compile('Agent Genie')).click()
     type_and_send(page, re.compile('Message Genie'),
                   'E2E memo thread, nothing important here at all, just a filler line. Codeword: PELICAN. Reply OK.')
-    expect(seen(page, re.compile(r'(PM|AM|\d) · Mac · '))).to_be_visible(timeout=240000)
+    # This conversation's own reply (the previous one may still be fading out).
+    expect(seen(page, re.compile(r'Genie\s+OK'))).to_be_visible(timeout=240000)
     page.get_by_role('button', name='New chat').click()
     page.get_by_role('button', name=re.compile('Agent Genie')).click()
     with page.expect_file_chooser() as fc:

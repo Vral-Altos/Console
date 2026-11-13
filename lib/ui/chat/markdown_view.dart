@@ -8,6 +8,7 @@ import 'package:markdown/markdown.dart' as md;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../theme.dart';
+import 'code_highlight.dart';
 
 /// An agent's reply as rendered Markdown (GitHub flavour: tables, task
 /// lists, fenced code with a copy button). Links open in a new tab. Text is
@@ -53,6 +54,9 @@ class MarkdownView extends StatelessWidget {
       tableColumnWidth: const IntrinsicColumnWidth(),
       horizontalRuleDecoration: BoxDecoration(border: Border(top: BorderSide(color: t.border))),
       checkbox: body.copyWith(color: theme.colorScheme.primary),
+      // Code blocks draw their own card (CodeBlock).
+      codeblockDecoration: const BoxDecoration(),
+      codeblockPadding: EdgeInsets.zero,
     );
     return MarkdownBody(
       data: data,
@@ -125,19 +129,20 @@ class _CodeBlockState extends State<CodeBlock> {
   Widget build(BuildContext context) {
     final t = Tokens.of(context);
     final text = Theme.of(context).textTheme;
+    final base = TextStyle(fontFamily: t.mono, fontSize: 13, height: 1.55, color: Theme.of(context).colorScheme.onSurface);
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 2),
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: t.sunken,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: t.border),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: t.border.withValues(alpha: .7)),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Container(
-          padding: const EdgeInsets.fromLTRB(14, 4, 4, 4),
-          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.border))),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 2, 4, 0),
           child: Row(children: [
-            Text(widget.language ?? 'text', style: text.labelSmall?.copyWith(fontFamily: t.mono)),
+            Text(widget.language ?? 'text', style: text.labelSmall?.copyWith(fontFamily: t.mono, color: t.faint)),
             const Spacer(),
             TextButton.icon(
               onPressed: _copy,
@@ -146,7 +151,11 @@ class _CodeBlockState extends State<CodeBlock> {
                 foregroundColor: t.muted,
                 textStyle: text.labelSmall,
               ),
-              icon: Icon(_copied ? Icons.check : Icons.content_copy, size: 14),
+              icon: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 160),
+                transitionBuilder: (c, a) => ScaleTransition(scale: a, child: FadeTransition(opacity: a, child: c)),
+                child: Icon(_copied ? Icons.check_rounded : Icons.content_copy_rounded, key: ValueKey(_copied), size: 14),
+              ),
               label: Text(_copied ? 'Copied' : 'Copy'),
             ),
           ]),
@@ -156,11 +165,8 @@ class _CodeBlockState extends State<CodeBlock> {
           child: SingleChildScrollView(
             controller: _scroll,
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
-            child: Text(
-              widget.code,
-              style: TextStyle(fontFamily: t.mono, fontSize: 13, height: 1.5, color: Theme.of(context).colorScheme.onSurface),
-            ),
+            padding: const EdgeInsets.fromLTRB(14, 2, 14, 14),
+            child: Text.rich(highlightCode(context, widget.code, widget.language, base)),
           ),
         ),
       ]),
@@ -197,10 +203,10 @@ class _StreamingMarkdownState extends State<StreamingMarkdown> {
       return;
     }
     if (target == _shown) return;
-    // Reveal the rest in ~1.2 s at 20 frames a second.
-    final step = math.max(1, ((target - _shown) / 24).ceil());
+    // Reveal the rest in ~1 s at 30 frames a second.
+    final step = math.max(1, ((target - _shown) / 30).ceil());
     _timer?.cancel();
-    _timer = Timer.periodic(const Duration(milliseconds: 50), (timer) {
+    _timer = Timer.periodic(const Duration(milliseconds: 33), (timer) {
       if (!mounted) return timer.cancel();
       setState(() => _shown = math.min(widget.text.length, _shown + step));
       if (_shown >= widget.text.length) timer.cancel();
@@ -214,8 +220,13 @@ class _StreamingMarkdownState extends State<StreamingMarkdown> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final shown = widget.text.substring(0, math.min(_shown, widget.text.length));
-    return MarkdownView(data: '$shown ▍', selectable: false);
-  }
+  Widget build(BuildContext context) => MarkdownView(data: streamingMarkdown(widget.text.substring(0, math.min(_shown, widget.text.length))), selectable: false);
+}
+
+/// Half-written Markdown made renderable: an open code fence is closed so
+/// the code shows as code while it arrives, and a caret marks the end.
+String streamingMarkdown(String shown) {
+  final fences = RegExp(r'^\s*```', multiLine: true).allMatches(shown).length;
+  if (fences.isOdd) return '${shown.endsWith('\n') ? shown : '$shown\n'}```';
+  return '$shown \u258D';
 }

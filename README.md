@@ -18,8 +18,17 @@ site `va-console` in `vral-altos`): **https://va-console.web.app**.
 - **System** — approvals, hosts, agent sessions, usage by host/account, syncs,
   appearance.
 
-Shortcuts: Ctrl/⌘+K new chat, Ctrl/⌘+1…5 pages; Enter sends, Shift+Enter
-breaks the line.
+Shortcuts: Ctrl/⌘+K new chat, Ctrl/⌘+1…5 pages, Ctrl/⌘+Shift+S shows or
+hides the conversations; in the message box Enter sends, Shift+Enter breaks
+the line, Esc stops the running turn and ↑ (in an empty box) edits the last
+message.
+
+Chat details: replies stream with a caret (an open code fence renders as code
+while it arrives); the tools a turn used fold into one line that opens to the
+list; fenced code is syntax-coloured (`lib/ui/chat/code_highlight.dart`, a
+bundled subset of `highlight` grammars); new messages rise in, the streamed
+answer becomes the finished reply in place, and a "New messages" pill appears
+when you have scrolled up. Light/dark switch with a fade.
 
 Only the operator's verified Google account (siddharth.chitikela@) gets in (`lib/data/firebase.dart`
 and `firestore.rules`, which must list the same accounts).

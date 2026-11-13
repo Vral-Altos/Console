@@ -45,7 +45,26 @@ class Tokens extends ThemeExtension<Tokens> {
   Tokens copyWith() => this;
 
   @override
-  Tokens lerp(Tokens? other, double t) => t < .5 || other == null ? this : other;
+  Tokens lerp(Tokens? other, double t) {
+    if (other == null) return this;
+    Color c(Color a, Color b) => Color.lerp(a, b, t)!;
+    // Colours blend, so switching light/dark fades instead of jumping.
+    return Tokens(
+      canvas: c(canvas, other.canvas),
+      panel: c(panel, other.panel),
+      sunken: c(sunken, other.sunken),
+      border: c(border, other.border),
+      muted: c(muted, other.muted),
+      faint: c(faint, other.faint),
+      ok: c(ok, other.ok),
+      warn: c(warn, other.warn),
+      bad: c(bad, other.bad),
+      info: c(info, other.info),
+      userBubble: c(userBubble, other.userBubble),
+      mono: t < .5 ? mono : other.mono,
+      series: [for (var i = 0; i < series.length && i < other.series.length; i++) c(series[i], other.series[i])],
+    );
+  }
 }
 
 const _accentLight = Color(0xFF4A5BD4);

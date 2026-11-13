@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/models.dart';
@@ -28,17 +29,36 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     final t = Tokens.of(context);
     final wide = MediaQuery.sizeOf(context).width >= 900;
     final selected = ref.watch(selectedThreadProvider);
-    final main = selected == null
-        ? NewChatView(onMenu: wide ? (_sidebar ? null : () => setState(() => _sidebar = true)) : () => _scaffold.currentState?.openDrawer())
-        : ConversationView(
-            key: ValueKey(selected),
-            threadId: selected,
-            onMenu: wide ? (_sidebar ? null : () => setState(() => _sidebar = true)) : () => _scaffold.currentState?.openDrawer(),
-          );
+    final onMenu = wide ? (_sidebar ? null : () => setState(() => _sidebar = true)) : () => _scaffold.currentState?.openDrawer();
+    final main = _Switch(
+      child: selected == null
+          ? NewChatView(key: const ValueKey('new'), onMenu: onMenu)
+          : ConversationView(key: ValueKey(selected), threadId: selected, onMenu: onMenu),
+    );
+    return CallbackShortcuts(
+      bindings: {
+        // Show or hide the conversations: ⌘⇧S / Ctrl+Shift+S.
+        const SingleActivator(LogicalKeyboardKey.keyS, meta: true, shift: true): _toggleSidebar,
+        const SingleActivator(LogicalKeyboardKey.keyS, control: true, shift: true): _toggleSidebar,
+      },
+      child: _layout(context, t, wide, main),
+    );
+  }
+
+  void _toggleSidebar() {
+    if (MediaQuery.sizeOf(context).width >= 900) {
+      setState(() => _sidebar = !_sidebar);
+    } else {
+      final s = _scaffold.currentState;
+      s?.isDrawerOpen ?? false ? s?.closeDrawer() : s?.openDrawer();
+    }
+  }
+
+  Widget _layout(BuildContext context, Tokens t, bool wide, Widget main) {
     if (wide) {
       return Row(children: [
         AnimatedSize(
-          duration: const Duration(milliseconds: 180),
+          duration: const Duration(milliseconds: 220),
           curve: Curves.easeOutCubic,
           child: _sidebar
               ? SizedBox(
@@ -65,6 +85,25 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       body: main,
     );
   }
+}
+
+/// Cross-fades between conversations instead of cutting.
+class _Switch extends StatelessWidget {
+  const _Switch({required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => AnimatedSwitcher(
+    duration: const Duration(milliseconds: 200),
+    switchInCurve: Curves.easeOutCubic,
+    switchOutCurve: Curves.easeInCubic,
+    layoutBuilder: (current, previous) => Stack(children: [...previous, ?current]),
+    transitionBuilder: (child, a) => FadeTransition(
+      opacity: a,
+      child: SlideTransition(position: Tween(begin: const Offset(0, .008), end: Offset.zero).animate(a), child: child),
+    ),
+    child: child,
+  );
 }
 
 /// The bar above a conversation.
@@ -106,13 +145,33 @@ class _ConversationViewState extends ConsumerState<ConversationView> {
   final _composer = GlobalKey<ComposerState>();
   bool _showJump = false;
 
+  /// When each item was first shown: items that arrive after the
+  /// conversation opened animate in; the ones it opened with do not.
+  final _firstSeen = <String, DateTime>{};
+  bool _opened = false;
+
+  /// Messages there were when the operator scrolled away from the latest.
+  int? _countWhenAway;
+  int _count = 0;
+
   @override
   void initState() {
     super.initState();
     _scroll.addListener(() {
-      final show = _scroll.hasClients && _scroll.offset > 400;
-      if (show != _showJump) setState(() => _showJump = show);
+      final away = _scroll.hasClients && _scroll.offset > 400;
+      if (away != _showJump) {
+        setState(() {
+          _showJump = away;
+          _countWhenAway = away ? _count : null;
+        });
+      }
     });
+  }
+
+  bool _fresh(String key) {
+    final now = DateTime.now();
+    final seen = _firstSeen.putIfAbsent(key, () => _opened ? now : DateTime(2000));
+    return now.difference(seen) < const Duration(milliseconds: 400);
   }
 
   @override
@@ -148,7 +207,18 @@ class _ConversationViewState extends ConsumerState<ConversationView> {
     void retry(ChatMessage m) => guarded(context, () => _send(m.text, m.attachments, m.mentions));
     void edit(ChatMessage m) => _composer.currentState?.restore(m.text, attachments: m.attachments, mentions: m.mentions);
 
+    void editLast() {
+      if (thread?.closed ?? true) return;
+      final last = messages.lastWhere((m) => m.fromOperator && m.kind != 'close', orElse: () => const ChatMessage(id: '', threadId: '', fromOperator: false, text: ''));
+      if (last.fromOperator) edit(last);
+    }
+
     final items = _items(context, messages, agent, thread?.closed ?? false, stop: stop, retry: retry, edit: edit);
+    final loaded = messagesValue.hasValue && messages.isNotEmpty;
+    _count = messages.length;
+    final unseen = _showJump && _countWhenAway != null && messages.length > _countWhenAway!;
+    final keyed = [for (final (k, w) in items) (k, w, _fresh(k))];
+    if (loaded) _opened = true;
 
     return Column(children: [
       _ChatHeader(
@@ -172,31 +242,88 @@ class _ConversationViewState extends ConsumerState<ConversationView> {
       ),
       Expanded(
         child: Stack(children: [
-          AsyncView(
-            value: messagesValue,
-            data: (_) => SelectionArea(
+          if (messagesValue.hasError)
+            AsyncView(value: messagesValue, data: (_) => const SizedBox.shrink())
+          else if (!loaded)
+            const SingleChildScrollView(child: ChatColumn(child: ConversationSkeleton()))
+          else
+            SelectionArea(
               child: ListView.builder(
                 controller: _scroll,
                 reverse: true,
-                padding: const EdgeInsets.only(top: 12, bottom: 24),
-                itemCount: items.length,
-                itemBuilder: (context, i) => ChatColumn(child: items[items.length - 1 - i]),
+                padding: const EdgeInsets.only(top: 12, bottom: 28),
+                itemCount: keyed.length,
+                findChildIndexCallback: (key) {
+                  final k = (key as ValueKey<String>).value;
+                  final i = keyed.indexWhere((e) => e.$1 == k);
+                  return i < 0 ? null : keyed.length - 1 - i;
+                },
+                itemBuilder: (context, i) {
+                  final (k, w, fresh) = keyed[keyed.length - 1 - i];
+                  return Appear(key: ValueKey(k), animate: fresh, child: ChatColumn(child: w));
+                },
+              ),
+            ),
+          // Text fades out under the composer rather than being cut off.
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: 24,
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [t.canvas.withValues(alpha: 0), t.canvas],
+                  ),
+                ),
               ),
             ),
           ),
           Positioned(
-            bottom: 10,
+            bottom: 12,
             left: 0,
             right: 0,
             child: Center(
-              child: AnimatedScale(
-                scale: _showJump ? 1 : 0,
-                duration: const Duration(milliseconds: 150),
-                child: Material(
-                  color: t.panel,
-                  shape: CircleBorder(side: BorderSide(color: t.border)),
-                  elevation: 2,
-                  child: IconButton(tooltip: 'Jump to latest', onPressed: _toBottom, icon: const Icon(Icons.arrow_downward, size: 18)),
+              child: AnimatedSlide(
+                offset: _showJump ? Offset.zero : const Offset(0, .6),
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOutCubic,
+                child: AnimatedOpacity(
+                  opacity: _showJump ? 1 : 0,
+                  duration: const Duration(milliseconds: 180),
+                  child: IgnorePointer(
+                    ignoring: !_showJump,
+                    child: Material(
+                      color: t.panel,
+                      shape: StadiumBorder(side: BorderSide(color: t.border)),
+                      elevation: 3,
+                      shadowColor: Colors.black26,
+                      child: InkWell(
+                        customBorder: const StadiumBorder(),
+                        onTap: _toBottom,
+                        child: Tooltip(
+                          message: 'Jump to latest',
+                          child: AnimatedSize(
+                            duration: const Duration(milliseconds: 200),
+                            curve: Curves.easeOutCubic,
+                            child: Padding(
+                              padding: EdgeInsets.symmetric(horizontal: unseen ? 14 : 9, vertical: 9),
+                              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                Icon(Icons.arrow_downward_rounded, size: 18, color: unseen ? Theme.of(context).colorScheme.primary : null),
+                                if (unseen) ...[
+                                  const SizedBox(width: 6),
+                                  Text('New messages', style: text.labelLarge?.copyWith(color: Theme.of(context).colorScheme.primary)),
+                                ],
+                              ]),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -228,13 +355,14 @@ class _ConversationViewState extends ConsumerState<ConversationView> {
           hint: 'Reply to ${agentLabel(agent)}…',
           onSend: _send,
           onStop: stopTarget == null ? null : () => stop(stopTarget),
+          onEditLast: editLast,
           stopping: stopTarget?.cancelRequested ?? false,
-          footnote: 'Agents can make mistakes. Enter sends · Shift+Enter for a new line · @ mentions · paste or drop files',
+          footnote: '${agentLabel(agent)} can make mistakes. Check what matters.',
         ),
     ]);
   }
 
-  List<Widget> _items(
+  List<(String, Widget)> _items(
     BuildContext context,
     List<ChatMessage> messages,
     String agent,
@@ -244,7 +372,7 @@ class _ConversationViewState extends ConsumerState<ConversationView> {
     required void Function(ChatMessage) edit,
   }) {
     final now = DateTime.now();
-    final out = <Widget>[];
+    final out = <(String, Widget)>[];
     DateTime? lastDay;
     final lastAgent = messages.lastIndexWhere((m) => !m.fromOperator);
     for (var i = 0; i < messages.length; i++) {
@@ -252,43 +380,45 @@ class _ConversationViewState extends ConsumerState<ConversationView> {
       final at = (m.createdAt ?? now).toLocal();
       final day = DateTime(at.year, at.month, at.day);
       if (lastDay != day) {
-        out.add(SystemNote(text: dayLabel(at, now), icon: Icons.calendar_today_outlined));
+        out.add(('day-$day', SystemNote(text: dayLabel(at, now), icon: Icons.calendar_today_outlined)));
         lastDay = day;
       }
       if (m.kind == 'close') {
-        out.add(switch (m.status) {
+        out.add(('close-${m.id}', switch (m.status) {
           MessageStatus.done => const SystemNote(text: 'Closed · the agent wrote a journal entry', icon: Icons.task_alt),
           MessageStatus.failed => FailedNote(message: m, onRetry: null),
           MessageStatus.cancelled => const SystemNote(text: 'Close cancelled'),
           _ => const SystemNote(text: 'Closing · writing the journal entry…', icon: Icons.hourglass_top),
-        });
+        }));
         continue;
       }
       if (m.fromOperator) {
-        out.add(OperatorBubble(message: m, onEdit: closed ? null : edit));
+        out.add(('msg-${m.id}', OperatorBubble(message: m, onEdit: closed ? null : edit)));
         switch (m.status) {
           case MessageStatus.queued || MessageStatus.running:
-            out.add(PendingReply(message: m, agent: agent, onStop: () => stop(m)));
+            // Keyed by the question, as the reply will be: the streamed
+            // answer becomes the finished one in place.
+            out.add(('turn-${m.id}', PendingReply(message: m, agent: agent, onStop: () => stop(m))));
           case MessageStatus.failed:
-            out.add(FailedNote(message: m, onRetry: closed ? null : () => retry(m)));
+            out.add(('failed-${m.id}', FailedNote(message: m, onRetry: closed ? null : () => retry(m))));
           case MessageStatus.cancelled:
             final next = i + 1 < messages.length ? messages[i + 1] : null;
             if (next == null || next.fromOperator || !next.stopped) {
-              out.add(const SystemNote(text: 'Stopped before a reply', icon: Icons.stop_circle_outlined));
+              out.add(('stopped-${m.id}', const SystemNote(text: 'Stopped before a reply', icon: Icons.stop_circle_outlined)));
             }
           default:
         }
       } else {
         final prompt = messages.take(i).lastWhere((x) => x.fromOperator && x.kind != 'close', orElse: () => m);
-        out.add(AgentReply(
+        final turn = 'turn-${prompt.id}';
+        final key = prompt.fromOperator && !out.any((e) => e.$1 == turn) ? turn : 'msg-${m.id}';
+        out.add((key, AgentReply(
           message: m,
           agent: agent,
+          latest: i == lastAgent,
           onRetry: i == lastAgent && !closed && prompt.fromOperator ? () => retry(prompt) : null,
-        ));
+        )));
       }
-    }
-    if (messages.isEmpty) {
-      out.add(const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator())));
     }
     return out;
   }
@@ -371,7 +501,7 @@ class NewChatView extends ConsumerWidget {
           ref.read(selectedThreadProvider.notifier).select(id);
         },
         leading: _AgentMenu(selected: agent, agents: [for (final a in agents) a.name]),
-        footnote: 'Enter sends · Shift+Enter for a new line · @ mentions · paste or drop files',
+        footnote: 'Enter to send · Shift+Enter for a new line · @ to mention · drop files to attach',
       ),
     ]);
   }

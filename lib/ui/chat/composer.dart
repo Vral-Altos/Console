@@ -27,6 +27,7 @@ class Composer extends ConsumerStatefulWidget {
     required this.onSend,
     this.threadId,
     this.onStop,
+    this.onEditLast,
     this.stopping = false,
     this.leading,
     this.footnote,
@@ -43,6 +44,9 @@ class Composer extends ConsumerStatefulWidget {
 
   /// Set while a turn runs: shows the stop button.
   final VoidCallback? onStop;
+
+  /// ↑ in an empty box: edit the last message sent.
+  final VoidCallback? onEditLast;
   final bool stopping;
   final Widget? leading;
   final String? footnote;
@@ -288,6 +292,14 @@ class ComposerState extends ConsumerState<Composer> {
         return KeyEventResult.handled;
       }
     }
+    if (e is KeyDownEvent && key == LogicalKeyboardKey.escape && widget.onStop != null && !widget.stopping) {
+      widget.onStop!();
+      return KeyEventResult.handled;
+    }
+    if (e is KeyDownEvent && key == LogicalKeyboardKey.arrowUp && widget.onEditLast != null && _c.text.isEmpty && _uploads.isEmpty) {
+      widget.onEditLast!();
+      return KeyEventResult.handled;
+    }
     if (e is! KeyDownEvent || key != LogicalKeyboardKey.enter) return KeyEventResult.ignored;
     if (HardwareKeyboard.instance.isShiftPressed || _c.value.composing.isValid) return KeyEventResult.ignored;
     _send();
@@ -377,7 +389,8 @@ class ComposerState extends ConsumerState<Composer> {
                   onHover: (i) => setState(() => _highlight = i),
                 ),
               AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOutCubic,
                 decoration: BoxDecoration(
                   color: _dragging ? scheme.primary.withValues(alpha: .05) : t.panel,
                   borderRadius: BorderRadius.circular(18),
@@ -385,12 +398,12 @@ class ComposerState extends ConsumerState<Composer> {
                     color: _dragging
                         ? scheme.primary
                         : _focus.hasFocus
-                        ? scheme.primary.withValues(alpha: .55)
+                        ? t.faint.withValues(alpha: .7)
                         : t.border,
                     width: _dragging ? 1.6 : 1,
                   ),
                   boxShadow: [
-                    BoxShadow(color: Colors.black.withValues(alpha: .05), blurRadius: 18, offset: const Offset(0, 4)),
+                    BoxShadow(color: Colors.black.withValues(alpha: _focus.hasFocus ? .09 : .05), blurRadius: _focus.hasFocus ? 24 : 18, offset: const Offset(0, 6)),
                   ],
                 ),
                 child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -476,7 +489,8 @@ class ComposerState extends ConsumerState<Composer> {
                           child: Text('${_c.text.length} / ${Composer.maxLength}', style: text.labelSmall?.copyWith(color: t.warn)),
                         ),
                       AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 150),
+                        duration: const Duration(milliseconds: 180),
+                        transitionBuilder: (c, a) => ScaleTransition(scale: Tween(begin: .7, end: 1.0).animate(a), child: FadeTransition(opacity: a, child: c)),
                         child: showStop
                             ? IconButton.filled(
                                 key: const ValueKey('stop'),

@@ -9,7 +9,9 @@ import 'package:va_console/data/models.dart';
 import 'package:va_console/data/providers.dart';
 import 'package:va_console/ui/app.dart';
 import 'package:va_console/ui/chat/chat_page.dart';
+import 'package:va_console/ui/chat/code_highlight.dart';
 import 'package:va_console/ui/chat/composer.dart';
+import 'package:va_console/ui/chat/markdown_view.dart';
 import 'package:va_console/ui/chat/message_tiles.dart';
 import 'package:va_console/ui/chat/thread_sidebar.dart';
 import 'package:va_console/ui/logs_page.dart';
@@ -179,6 +181,11 @@ void main() {
     await tester.pump();
     expect(find.textContaining('a1'), findsWidgets);
     expect(find.textContaining('Mac · pers · Opus 5.5 · 1.2k tokens · \$0.05 · 4s'), findsOneWidget);
+    // Tools fold to one line and open to the list.
+    expect(find.text('Used Read ×2 · 4s'), findsOneWidget);
+    expect(find.text('Read ×2'), findsNothing);
+    await tester.tap(find.text('Used Read ×2 · 4s'));
+    await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('Read ×2'), findsOneWidget);
     expect(find.text('This turn failed'), findsOneWidget);
     expect(find.text('No Claude account'), findsOneWidget);
@@ -190,6 +197,114 @@ void main() {
     expect(find.text('Budget'), findsOneWidget);
     await tester.pump(const Duration(seconds: 2));
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('keys: Esc stops the running turn, ↑ in an empty box edits the last message', (tester) async {
+    size(tester, const Size(1300, 1200));
+    final stopped = <String>[];
+    final messages = [
+      ChatMessage(id: '1', threadId: 't1', fromOperator: true, text: 'first question', status: MessageStatus.done, createdAt: now),
+      ChatMessage(id: '2', threadId: 't1', fromOperator: false, text: 'answer', createdAt: now),
+      ChatMessage(id: '3', threadId: 't1', fromOperator: true, text: 'second question', status: MessageStatus.running, claimedAt: now, createdAt: now),
+    ];
+    final c = GlobalKey<ComposerState>();
+    await tester.pumpWidget(host(
+      Column(children: [
+        Expanded(
+          child: Composer(
+            key: c,
+            draftKey: 'k',
+            hint: 'h',
+            onSend: (_, _, _) async {},
+            onStop: () => stopped.add('stop'),
+            onEditLast: () => c.currentState!.restore(messages[2].text),
+            autofocus: true,
+          ),
+        ),
+      ]),
+      overridesWith(),
+    ));
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    expect(stopped, ['stop']);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.pump();
+    expect(find.text('second question'), findsOneWidget, reason: 'the last message is back in the box');
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.pump();
+    expect(find.text('second question'), findsOneWidget, reason: '↑ only edits from an empty box');
+  });
+
+  testWidgets('a conversation loads with a placeholder, then new messages rise in', (tester) async {
+    size(tester, const Size(1300, 1200));
+    final ctl = StreamController<List<ChatMessage>>();
+    await tester.pumpWidget(host(const ConversationView(threadId: 't1'), [
+      ...overridesWith(threads: const [ChatThread(id: 't1', agent: 'genie', title: 'Plans')]),
+      messagesProvider('t1').overrideWith((ref) => ctl.stream),
+    ]));
+    await tester.pump();
+    expect(find.byType(ConversationSkeleton), findsOneWidget);
+    final first = ChatMessage(id: '1', threadId: 't1', fromOperator: true, text: 'hello', status: MessageStatus.running, claimedAt: now, createdAt: now);
+    ctl.add([first]);
+    await tester.pump();
+    expect(find.byType(ConversationSkeleton), findsNothing);
+    double opacityOf(String text) => tester
+        .widget<FadeTransition>(find.ancestor(of: find.textContaining(text), matching: find.byType(FadeTransition)).first)
+        .opacity
+        .value;
+    expect(opacityOf('hello'), 1, reason: 'what the conversation opened with does not animate');
+    // The streamed answer turns into the finished reply in place.
+    ctl.add([first.copyWith(partial: 'Hi there')]);
+    await tester.pump();
+    expect(find.byType(PendingReply), findsOneWidget);
+    ctl.add([
+      first.copyWith(status: MessageStatus.done),
+      ChatMessage(id: '2', threadId: 't1', fromOperator: false, text: 'Hi there', createdAt: now),
+    ]);
+    await tester.pump();
+    expect(find.byType(PendingReply), findsNothing);
+    expect(find.byType(AgentReply), findsOneWidget);
+    // A question sent later rises in.
+    ctl.add([
+      first.copyWith(status: MessageStatus.done),
+      ChatMessage(id: '2', threadId: 't1', fromOperator: false, text: 'Hi there', createdAt: now),
+      ChatMessage(id: '3', threadId: 't1', fromOperator: true, text: 'next one', status: MessageStatus.queued, createdAt: now),
+    ]);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 40));
+    expect(opacityOf('next one'), lessThan(1));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(opacityOf('next one'), 1);
+    await ctl.close();
+  });
+
+  test('half-written Markdown: an open code fence is closed while it streams', () {
+    expect(streamingMarkdown('Here:\n```dart\nvoid main'), 'Here:\n```dart\nvoid main\n```');
+    expect(streamingMarkdown('Done.\n```\nx\n```\nMore'), 'Done.\n```\nx\n```\nMore ▍');
+  });
+
+  testWidgets('code is coloured for known languages and plain otherwise', (tester) async {
+    late TextSpan dart, plain, unknown;
+    await tester.pumpWidget(MaterialApp(
+      theme: consoleTheme(Brightness.light, fonts: false),
+      home: Builder(builder: (context) {
+        dart = highlightCode(context, 'final x = "a"; // note', 'dart', const TextStyle());
+        plain = highlightCode(context, 'final x', null, const TextStyle());
+        unknown = highlightCode(context, 'final x', 'nosuchlang', const TextStyle());
+        return const SizedBox();
+      }),
+    ));
+    final colours = <Color>{};
+    void walk(InlineSpan s) {
+      if (s.style?.color != null) colours.add(s.style!.color!);
+      if (s is TextSpan) s.children?.forEach(walk);
+    }
+
+    walk(dart);
+    expect(dart.toPlainText(), 'final x = "a"; // note');
+    expect(colours.length, greaterThanOrEqualTo(3), reason: 'keyword, string and comment differ');
+    expect(plain.children, isNull);
+    expect(unknown.toPlainText(), 'final x');
   });
 
   testWidgets('a closed conversation offers a new chat instead of a composer', (tester) async {

@@ -182,9 +182,15 @@ class _ThreadTileState extends ConsumerState<ThreadTile> {
       onExit: (_) => setState(() => _hover = false),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 1),
-        child: Material(
-          color: widget.selected ? t.sunken : (_hover ? t.sunken.withValues(alpha: .6) : Colors.transparent),
-          borderRadius: BorderRadius.circular(10),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 140),
+          curve: Curves.easeOut,
+          decoration: BoxDecoration(
+            color: widget.selected ? t.sunken : (_hover ? t.sunken.withValues(alpha: .6) : t.sunken.withValues(alpha: 0)),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Material(
+          type: MaterialType.transparency,
           child: InkWell(
             borderRadius: BorderRadius.circular(10),
             onTap: widget.onTap,
@@ -226,6 +232,7 @@ class _ThreadTileState extends ConsumerState<ThreadTile> {
                 ),
               ]),
             ),
+          ),
           ),
         ),
       ),

@@ -88,7 +88,11 @@ class _ActionIconState extends State<_ActionIcon> {
         if (mounted) setState(() => _done = false);
       });
     },
-    icon: Icon(_done ? widget.doneIcon : widget.icon),
+    icon: AnimatedSwitcher(
+      duration: const Duration(milliseconds: 160),
+      transitionBuilder: (c, a) => ScaleTransition(scale: a, child: FadeTransition(opacity: a, child: c)),
+      child: Icon(_done ? widget.doneIcon : widget.icon, key: ValueKey(_done)),
+    ),
   );
 }
 
@@ -105,7 +109,7 @@ class OperatorBubble extends StatelessWidget {
     return _Hoverable(
       builder: (context, hover) {
         return Padding(
-          padding: const EdgeInsets.only(top: 18, bottom: 2),
+          padding: const EdgeInsets.only(top: 22, bottom: 2),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
@@ -141,8 +145,8 @@ class OperatorBubble extends StatelessWidget {
                         child: Text(clockTime(context, message.createdAt!), style: text.labelSmall?.copyWith(color: t.faint)),
                       ),
                     _ActionIcon(
-                      icon: Icons.content_copy,
-                      doneIcon: Icons.check,
+                      icon: Icons.content_copy_rounded,
+                      doneIcon: Icons.check_rounded,
                       tooltip: 'Copy',
                       onPressed: () => Clipboard.setData(ClipboardData(text: message.text)),
                     ),
@@ -160,16 +164,17 @@ class OperatorBubble extends StatelessWidget {
 }
 
 class _AgentHeader extends StatelessWidget {
-  const _AgentHeader({required this.agent, this.trailing});
+  const _AgentHeader({required this.agent, this.trailing, this.busy = false});
   final String agent;
   final Widget? trailing;
+  final bool busy;
 
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.only(bottom: 8),
     child: Row(
       children: [
-        AgentAvatar(agent: agent, size: 24),
+        _Breathing(active: busy, child: AgentAvatar(agent: agent, size: 24)),
         const SizedBox(width: 10),
         Text(agentLabel(agent), style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600)),
         if (trailing != null) ...[const SizedBox(width: 10), Flexible(child: trailing!)],
@@ -179,11 +184,16 @@ class _AgentHeader extends StatelessWidget {
 }
 
 /// An agent's reply: Markdown, with copy / retry and what the turn took.
+/// Laid out like [PendingReply] (header, tools, text, a footer row), so the
+/// streamed reply turns into the finished one without moving.
 class AgentReply extends StatelessWidget {
-  const AgentReply({super.key, required this.message, required this.agent, this.onRetry});
+  const AgentReply({super.key, required this.message, required this.agent, this.onRetry, this.latest = false});
   final ChatMessage message;
   final String agent;
   final VoidCallback? onRetry;
+
+  /// The conversation's newest reply keeps its actions visible.
+  final bool latest;
 
   @override
   Widget build(BuildContext context) {
@@ -191,6 +201,7 @@ class AgentReply extends StatelessWidget {
     final text = Theme.of(context).textTheme;
     final m = message;
     final meta = [
+      if (m.createdAt != null) clockTime(context, m.createdAt!),
       if (m.placement != null)
         m.placement == 'mac'
             ? 'Mac'
@@ -206,7 +217,7 @@ class AgentReply extends StatelessWidget {
     return _Hoverable(
       builder: (context, hover) {
         return Padding(
-          padding: const EdgeInsets.only(top: 18, bottom: 4),
+          padding: const EdgeInsets.only(top: 12, bottom: 4),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -216,47 +227,55 @@ class AgentReply extends StatelessWidget {
               ),
               if (m.tools.isNotEmpty)
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: ToolsUsed(tools: m.tools),
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: ToolActivity(tools: m.tools, took: (m.durationMs ?? 0) > 0 ? Duration(milliseconds: m.durationMs!) : null),
                 ),
               MarkdownView(data: m.text),
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  Flexible(
-                    child: Text(
-                      [if (m.createdAt != null) clockTime(context, m.createdAt!), if (meta.isNotEmpty) meta].join(' · '),
-                      style: text.labelSmall?.copyWith(color: t.faint),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  if (m.costUsd != null)
-                    Tooltip(
-                      message: 'Cost is the API-equivalent Claude Code reports; a subscription is not billed per turn.',
-                      child: Padding(
-                        padding: const EdgeInsets.only(left: 4),
-                        child: Icon(Icons.info_outline, size: 13, color: t.faint),
+              const SizedBox(height: 6),
+              SizedBox(
+                height: 32,
+                child: Row(
+                  children: [
+                    AnimatedOpacity(
+                      duration: const Duration(milliseconds: 140),
+                      opacity: hover || latest ? 1 : 0,
+                      alwaysIncludeSemantics: true,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _ActionIcon(
+                            icon: Icons.content_copy_rounded,
+                            doneIcon: Icons.check_rounded,
+                            tooltip: 'Copy',
+                            onPressed: () => Clipboard.setData(ClipboardData(text: m.text)),
+                          ),
+                          if (onRetry != null) _ActionIcon(icon: Icons.refresh_rounded, tooltip: 'Ask again', onPressed: onRetry!),
+                        ],
                       ),
                     ),
-                  const SizedBox(width: 6),
-                  AnimatedOpacity(
-                    duration: const Duration(milliseconds: 120),
-                    opacity: hover ? 1 : .0,
-                    alwaysIncludeSemantics: true,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _ActionIcon(
-                          icon: Icons.content_copy,
-                          doneIcon: Icons.check,
-                          tooltip: 'Copy',
-                          onPressed: () => Clipboard.setData(ClipboardData(text: m.text)),
-                        ),
-                        if (onRetry != null) _ActionIcon(icon: Icons.refresh, tooltip: 'Ask again', onPressed: onRetry!),
-                      ],
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: AnimatedOpacity(
+                        duration: const Duration(milliseconds: 140),
+                        opacity: hover ? 1 : 0,
+                        alwaysIncludeSemantics: true,
+                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                          Flexible(
+                            child: Text(meta, style: text.labelSmall?.copyWith(color: t.faint), overflow: TextOverflow.ellipsis),
+                          ),
+                          if (m.costUsd != null)
+                            Tooltip(
+                              message: 'Cost is the API-equivalent Claude Code reports; a subscription is not billed per turn.',
+                              child: Padding(
+                                padding: const EdgeInsets.only(left: 4),
+                                child: Icon(Icons.info_outline, size: 13, color: t.faint),
+                              ),
+                            ),
+                        ]),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
           ),
@@ -276,36 +295,124 @@ class ToolsUsed extends StatelessWidget {
     return m == null ? name : '${m.group(2)} (${m.group(1)})';
   }
 
+  static IconData icon(String name) {
+    if (name.startsWith('mcp__')) return Icons.extension_outlined;
+    return switch (name) {
+      'Read' => Icons.description_outlined,
+      'Write' || 'Edit' || 'MultiEdit' || 'NotebookEdit' => Icons.edit_note_rounded,
+      'Bash' => Icons.terminal_rounded,
+      'Grep' || 'Glob' => Icons.search_rounded,
+      'WebSearch' => Icons.travel_explore_rounded,
+      'WebFetch' => Icons.language_rounded,
+      'Task' || 'Agent' => Icons.account_tree_outlined,
+      'TodoWrite' => Icons.checklist_rounded,
+      _ => Icons.handyman_outlined,
+    };
+  }
+
+  /// Each tool once, in first-use order, with how often it ran.
+  static List<(String name, int count)> counted(List<String> tools) {
+    final counts = <String, int>{};
+    for (final x in tools) {
+      counts[x] = (counts[x] ?? 0) + 1;
+    }
+    return [for (final e in counts.entries) (e.key, e.value)];
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = Tokens.of(context);
-    final counts = <String, int>{};
-    for (final x in tools) {
-      counts[label(x)] = (counts[label(x)] ?? 0) + 1;
-    }
-    return Wrap(
-      spacing: 6,
-      runSpacing: 6,
+    final text = Theme.of(context).textTheme;
+    final rows = counted(tools);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (final e in counts.entries)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: t.sunken,
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: t.border),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.handyman_outlined, size: 12, color: t.muted),
-                const SizedBox(width: 5),
-                Text(e.value > 1 ? '${e.key} ×${e.value}' : e.key, style: Theme.of(context).textTheme.labelSmall),
-              ],
-            ),
+        for (final (i, (name, n)) in rows.indexed)
+          Semantics(
+            container: true,
+            child: IntrinsicHeight(
+            child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              SizedBox(
+                width: 22,
+                child: Column(children: [
+                  Expanded(child: Center(child: Container(width: 1, color: i == 0 ? Colors.transparent : t.border))),
+                  Icon(icon(name), size: 14, color: t.muted),
+                  Expanded(child: Center(child: Container(width: 1, color: i == rows.length - 1 ? Colors.transparent : t.border))),
+                ]),
+              ),
+              const SizedBox(width: 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Text(n > 1 ? '${label(name)} ×$n' : label(name), style: text.bodySmall?.copyWith(color: t.muted)),
+              ),
+            ]),
+          ),
           ),
       ],
     );
+  }
+}
+
+/// What a turn did, folded to one line ("Used 4 tools · 12s"); opens to
+/// the list of tools.
+class ToolActivity extends StatefulWidget {
+  const ToolActivity({super.key, required this.tools, this.took, this.running = false});
+  final List<String> tools;
+  final Duration? took;
+  final bool running;
+
+  @override
+  State<ToolActivity> createState() => _ToolActivityState();
+}
+
+class _ToolActivityState extends State<ToolActivity> {
+  bool _open = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Tokens.of(context);
+    final text = Theme.of(context).textTheme;
+    final n = widget.tools.length;
+    final distinct = ToolsUsed.counted(widget.tools);
+    final what = distinct.length == 1 ? ToolsUsed.label(distinct.single.$1) : '$n tools';
+    final summary = [
+      '${widget.running ? 'Using' : 'Used'} $what${distinct.length == 1 && n > 1 ? ' ×$n' : ''}',
+      if (widget.took != null) duration(widget.took!),
+    ].join(' · ');
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Semantics(
+        container: true,
+        button: true,
+        expanded: _open,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: () => setState(() => _open = !_open),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 2),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(ToolsUsed.icon(widget.tools.last), size: 15, color: t.muted),
+              const SizedBox(width: 8),
+              Flexible(child: Text(summary, style: text.bodySmall?.copyWith(color: t.muted, fontWeight: FontWeight.w500))),
+              const SizedBox(width: 2),
+              AnimatedRotation(
+                turns: _open ? .25 : 0,
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOutCubic,
+                child: Icon(Icons.chevron_right_rounded, size: 18, color: t.faint),
+              ),
+            ]),
+          ),
+        ),
+      ),
+      AnimatedSize(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+        alignment: Alignment.topLeft,
+        child: _open
+            ? Padding(padding: const EdgeInsets.only(top: 4, left: 2), child: ToolsUsed(tools: widget.tools))
+            : const SizedBox(width: double.infinity),
+      ),
+    ]);
   }
 }
 
@@ -339,8 +446,8 @@ class _ElapsedState extends State<Elapsed> {
   }
 }
 
-/// The agent's reply while it is queued or being written: where it will
-/// run, what it is doing, and the text so far.
+/// The agent's reply while it is queued or being written: the text so far,
+/// the tools it has used, and underneath what it is doing now.
 class PendingReply extends ConsumerWidget {
   const PendingReply({super.key, required this.message, required this.agent, required this.onStop});
   final ChatMessage message;
@@ -366,7 +473,7 @@ class PendingReply extends ConsumerWidget {
       waiting = isFresh(hosts['mac'], now) ? 'Waiting for the Mac' : 'Waking the cloud runner';
     }
     final status = m.cancelRequested
-        ? 'Stopping…'
+        ? 'Stopping'
         : running
         ? (m.activity ?? ((m.partial ?? '').isEmpty ? 'Thinking' : 'Writing'))
         : waiting;
@@ -377,66 +484,181 @@ class PendingReply extends ConsumerWidget {
               ? 'Cloud'
               : 'Devstation')
         : null;
+    final hasText = (m.partial ?? '').isNotEmpty;
     return Padding(
-      padding: const EdgeInsets.only(top: 18, bottom: 4),
+      padding: const EdgeInsets.only(top: 12, bottom: 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _AgentHeader(agent: agent),
-          Row(
-            children: [
-              SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: t.info)),
-              const SizedBox(width: 10),
-              Flexible(
-                child: _Shimmer(
-                  child: Text(
-                    '$status…'.replaceAll('……', '…'),
-                    style: text.bodyMedium?.copyWith(color: t.muted, fontWeight: FontWeight.w500),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Elapsed(
-                since: running ? m.claimedAt ?? m.createdAt : m.createdAt,
-                style: text.labelSmall?.copyWith(fontFamily: t.mono),
-              ),
-              if (host != null) Text(' · $host', style: text.labelSmall),
-              const SizedBox(width: 6),
-              TextButton(
-                onPressed: m.cancelRequested ? null : onStop,
-                style: TextButton.styleFrom(visualDensity: VisualDensity.compact, foregroundColor: t.muted),
-                child: Text(running ? 'Stop' : 'Cancel'),
-              ),
-            ],
-          ),
+          _AgentHeader(agent: agent, busy: true),
           if (m.tools.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: ToolsUsed(tools: m.tools),
+              padding: const EdgeInsets.only(bottom: 10),
+              child: ToolActivity(tools: m.tools, running: true),
             ),
-          if ((m.partial ?? '').isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: StreamingMarkdown(text: m.partial!),
+          if (hasText) StreamingMarkdown(text: m.partial!),
+          SizedBox(height: hasText ? 6 : 0),
+          SizedBox(
+            height: 32,
+            child: Row(
+              children: [
+                Flexible(
+                  child: ShimmerText(
+                    '${status.replaceAll(RegExp(r'…+$'), '')}…',
+                    style: text.bodyMedium?.copyWith(color: t.muted, fontWeight: FontWeight.w500),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Elapsed(
+                  since: running ? m.claimedAt ?? m.createdAt : m.createdAt,
+                  style: text.labelSmall?.copyWith(fontFamily: t.mono, color: t.faint),
+                ),
+                if (host != null) Text(' · $host', style: text.labelSmall?.copyWith(color: t.faint)),
+                const SizedBox(width: 4),
+                TextButton(
+                  onPressed: m.cancelRequested ? null : onStop,
+                  style: TextButton.styleFrom(visualDensity: VisualDensity.compact, foregroundColor: t.muted, textStyle: text.labelMedium),
+                  child: Text(running ? 'Stop' : 'Cancel'),
+                ),
+              ],
             ),
+          ),
         ],
       ),
     );
   }
 }
 
-/// A gentle opacity pulse for "in progress" text.
-class _Shimmer extends StatefulWidget {
-  const _Shimmer({required this.child});
-  final Widget child;
+/// "In progress" text: a soft highlight sweeps across it.
+class ShimmerText extends StatefulWidget {
+  const ShimmerText(this.text, {super.key, this.style});
+  final String text;
+  final TextStyle? style;
 
   @override
-  State<_Shimmer> createState() => _ShimmerState();
+  State<ShimmerText> createState() => _ShimmerTextState();
 }
 
-class _ShimmerState extends State<_Shimmer> with SingleTickerProviderStateMixin {
-  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1100))
+class _ShimmerTextState extends State<ShimmerText> with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1800))..repeat();
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final base = widget.style?.color ?? Tokens.of(context).muted;
+    final bright = Theme.of(context).colorScheme.onSurface;
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (context, child) {
+        final x = -1.0 + 3.0 * Curves.easeInOut.transform(_c.value);
+        return ShaderMask(
+          blendMode: BlendMode.srcIn,
+          shaderCallback: (r) => LinearGradient(
+            begin: Alignment(x - 1, 0),
+            end: Alignment(x + 1, 0),
+            colors: [base, bright, base],
+            stops: const [.3, .5, .7],
+          ).createShader(r),
+          child: child,
+        );
+      },
+      child: Text(widget.text, style: widget.style, maxLines: 1, overflow: TextOverflow.ellipsis),
+    );
+  }
+}
+
+/// A slow pulse on the agent's avatar while it works.
+class _Breathing extends StatefulWidget {
+  const _Breathing({required this.child, required this.active});
+  final Widget child;
+  final bool active;
+
+  @override
+  State<_Breathing> createState() => _BreathingState();
+}
+
+class _BreathingState extends State<_Breathing> with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400));
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.active) _c.repeat(reverse: true);
+  }
+
+  @override
+  void didUpdateWidget(_Breathing old) {
+    super.didUpdateWidget(old);
+    if (widget.active && !_c.isAnimating) _c.repeat(reverse: true);
+    if (!widget.active && _c.isAnimating) _c.animateTo(0, duration: const Duration(milliseconds: 200));
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: _c,
+    builder: (_, child) {
+      final v = Curves.easeInOut.transform(_c.value);
+      return Transform.scale(scale: 1 - .08 * v, child: Opacity(opacity: 1 - .35 * v, child: child));
+    },
+    child: widget.child,
+  );
+}
+
+/// New content fades and rises into place; content already there when the
+/// conversation opened does not move.
+class Appear extends StatefulWidget {
+  const Appear({super.key, required this.child, required this.animate});
+  final Widget child;
+  final bool animate;
+
+  @override
+  State<Appear> createState() => _AppearState();
+}
+
+class _AppearState extends State<Appear> with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 320));
+  late final Animation<double> _a = CurvedAnimation(parent: _c, curve: Curves.easeOutCubic);
+
+  @override
+  void initState() {
+    super.initState();
+    widget.animate ? _c.forward() : _c.value = 1;
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => FadeTransition(
+    opacity: _a,
+    child: SlideTransition(position: Tween(begin: const Offset(0, .04), end: Offset.zero).animate(_a), child: widget.child),
+  );
+}
+
+/// Placeholder lines while a conversation loads.
+class ConversationSkeleton extends StatefulWidget {
+  const ConversationSkeleton({super.key});
+
+  @override
+  State<ConversationSkeleton> createState() => _ConversationSkeletonState();
+}
+
+class _ConversationSkeletonState extends State<ConversationSkeleton> with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))
     ..repeat(reverse: true);
 
   @override
@@ -446,7 +668,38 @@ class _ShimmerState extends State<_Shimmer> with SingleTickerProviderStateMixin 
   }
 
   @override
-  Widget build(BuildContext context) => FadeTransition(opacity: Tween(begin: .55, end: 1.0).animate(_c), child: widget.child);
+  Widget build(BuildContext context) {
+    final t = Tokens.of(context);
+    Widget bar(double w, {double h = 12, double r = 6}) => FractionallySizedBox(
+      widthFactor: w,
+      alignment: Alignment.centerLeft,
+      child: Container(height: h, decoration: BoxDecoration(color: t.sunken, borderRadius: BorderRadius.circular(r))),
+    );
+    return Semantics(
+      label: 'Loading the conversation',
+      child: FadeTransition(
+        opacity: Tween(begin: .5, end: 1.0).animate(_c),
+        child: Padding(
+          padding: const EdgeInsets.only(top: 24),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Align(alignment: Alignment.centerRight, child: SizedBox(width: 260, child: bar(1, h: 40, r: 18))),
+            const SizedBox(height: 28),
+            Row(children: [
+              Container(width: 24, height: 24, decoration: BoxDecoration(color: t.sunken, borderRadius: BorderRadius.circular(8))),
+              const SizedBox(width: 10),
+              SizedBox(width: 70, child: bar(1)),
+            ]),
+            const SizedBox(height: 14),
+            bar(.95),
+            const SizedBox(height: 10),
+            bar(.88),
+            const SizedBox(height: 10),
+            bar(.6),
+          ]),
+        ),
+      ),
+    );
+  }
 }
 
 /// A turn that failed: the reason, and Retry.
