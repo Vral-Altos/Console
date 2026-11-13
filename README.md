@@ -13,6 +13,12 @@ site `va-console` in `vral-altos`): **https://va-console.web.app**.
   they upload to the attachments bucket under `storage.rules`. `@` mentions a
   conversation, project or agent, and the agent gets its context.
 - **Projects** — Devstations (GCE dev VMs with Claude Code) and the Factory.
+- **Billing** — what every GCP project on the billing account costs, from
+  the Cloud Billing BigQuery export (`billing/breakdown`, kept by the cloud
+  runner): this and last invoice month, pace against the target, daily cost
+  by project, projects → services and SKUs, net of credits. Until the export
+  is switched on (Cloud Console → Billing → Billing export → Standard usage
+  cost → `vral-altos` / `va_billing`) it shows how, and the budget's total.
 - **Topology** — everything Vral Altos and your other projects are made of,
   on one interactive isometric map: every GCP project you can see (Cloud
   Asset Inventory: services, databases, buckets, secrets, queues, jobs, VMs,
