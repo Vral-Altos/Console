@@ -10,6 +10,7 @@ import '../theme.dart';
 import '../widgets.dart';
 import 'attachment_views.dart';
 import 'markdown_view.dart';
+import 'chat_naming.dart';
 
 const _column = 760.0;
 
@@ -209,10 +210,17 @@ class AgentReply extends StatelessWidget {
             ? 'Cloud'
             : 'Devstation',
       ?m.accountId,
-      if (m.model != null) modelName(m.model),
-      if ((m.outputTokens ?? 0) > 0) '${compact(m.outputTokens)} tokens',
-      if (m.costUsd != null && m.costUsd! > 0) usd(m.costUsd),
       if ((m.durationMs ?? 0) > 0) duration(Duration(milliseconds: m.durationMs!)),
+    ].join(' · ');
+    // What the turn used, always shown: model, tokens, cost, the account's
+    // quota after it.
+    final usage = [
+      if (m.model != null) modelName(m.model),
+      if ((m.contextTokens ?? 0) > 0) '${compact(m.contextTokens)} context',
+      if ((m.outputTokens ?? 0) > 0) '${compact(m.outputTokens)} out',
+      if (m.costUsd != null) usd(m.costUsd),
+      if (m.quota?.fiveHour != null) quotaLabel('5h', m.quota!.fiveHour!),
+      if (m.quota?.sevenDay != null) quotaLabel('7d', m.quota!.sevenDay!),
     ].join(' · ');
     return _Hoverable(
       builder: (context, hover) {
@@ -255,24 +263,35 @@ class AgentReply extends StatelessWidget {
                     ),
                     const SizedBox(width: 6),
                     Flexible(
-                      child: AnimatedOpacity(
-                        duration: const Duration(milliseconds: 140),
-                        opacity: hover ? 1 : 0,
-                        alwaysIncludeSemantics: true,
-                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        if (usage.isNotEmpty)
                           Flexible(
-                            child: Text(meta, style: text.labelSmall?.copyWith(color: t.faint), overflow: TextOverflow.ellipsis),
-                          ),
-                          if (m.costUsd != null)
-                            Tooltip(
-                              message: 'Cost is the API-equivalent Claude Code reports; a subscription is not billed per turn.',
-                              child: Padding(
-                                padding: const EdgeInsets.only(left: 4),
-                                child: Icon(Icons.info_outline, size: 13, color: t.faint),
-                              ),
+                            child: Text(
+                              usage,
+                              key: const Key('reply-usage'),
+                              style: text.labelSmall?.copyWith(color: t.muted, fontFeatures: const [FontFeature.tabularFigures()]),
+                              overflow: TextOverflow.ellipsis,
                             ),
-                        ]),
-                      ),
+                          ),
+                        if (m.costUsd != null)
+                          Tooltip(
+                            message: 'Cost is the API-equivalent Claude Code reports; a subscription is not billed per turn. '
+                                'Quota is the account\'s 5-hour and 7-day usage after this reply.',
+                            child: Padding(
+                              padding: const EdgeInsets.only(left: 4),
+                              child: Icon(Icons.info_outline, size: 13, color: t.faint),
+                            ),
+                          ),
+                        if (meta.isNotEmpty)
+                          Flexible(
+                            child: AnimatedOpacity(
+                              duration: const Duration(milliseconds: 140),
+                              opacity: hover ? 1 : 0,
+                              alwaysIncludeSemantics: true,
+                              child: Text('  $meta', style: text.labelSmall?.copyWith(color: t.faint), overflow: TextOverflow.ellipsis),
+                            ),
+                          ),
+                      ]),
                     ),
                   ],
                 ),

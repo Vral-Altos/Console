@@ -6,7 +6,8 @@ rules_version = '2';
 // - the operator only (the verified Google account below), nobody else;
 // - read access to the Console's data and the status the system reports;
 // - write access only to start threads and queue operator messages; to
-//   rename, pin and archive threads; to cancel a queued message or ask a
+//   rename, pin, archive and file threads (project, purpose) and keep the
+//   chat projects; to cancel a queued message or ask a
 //   running one to stop; to queue Factory requests and decide approvals.
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -20,22 +21,51 @@ service cloud.firestore {
       return v is string && v.size() > 0 && v.size() <= max;
     }
 
-    // Conversations: created by the Console, maintained by the workers.
+    // A conversation's project: a chat project's name, or null (General).
+    function isProject(v) {
+      return v == null || isShortString(v, 80);
+    }
+
+    // Conversations: created by the Console, maintained by the workers
+    // (cost, name: `ChatNamer`). The operator may file them: project,
+    // purpose, topic (`title`); `projectSet` / `titleSet` keep the namer off.
     match /threads/{threadId} {
       allow read: if isOwner();
       allow create: if isOwner()
-        && request.resource.data.keys().hasOnly(['agent', 'title', 'createdAt', 'updatedAt', 'closed'])
+        && request.resource.data.keys().hasOnly(['agent', 'title', 'createdAt', 'updatedAt', 'closed', 'project', 'projectSet'])
         && request.resource.data.agent.matches('^[a-z0-9][a-z0-9_-]{0,40}$')
         && isShortString(request.resource.data.title, 200)
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time
-        && request.resource.data.closed == false;
+        && request.resource.data.closed == false
+        && isProject(request.resource.data.get('project', null))
+        && request.resource.data.get('projectSet', false) is bool;
       allow update: if isOwner()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'pinned', 'archived'])
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['title', 'titleSet', 'pinned', 'archived', 'project', 'projectSet', 'purpose'])
         && isShortString(request.resource.data.title, 200)
         && request.resource.data.get('pinned', false) is bool
-        && request.resource.data.get('archived', false) is bool;
+        && request.resource.data.get('archived', false) is bool
+        && request.resource.data.get('titleSet', false) is bool
+        && request.resource.data.get('projectSet', false) is bool
+        && isProject(request.resource.data.get('project', null))
+        && request.resource.data.get('purpose', 'other')
+             in ['build', 'fix', 'research', 'plan', 'advice', 'ops', 'admin', 'other'];
       allow delete: if false;
+    }
+
+    // The projects conversations are filed under; the operator keeps the
+    // list, the namer reads it.
+    match /chat_projects/{id} {
+      allow read: if isOwner();
+      allow create: if isOwner()
+        && request.resource.data.keys().hasOnly(['name', 'createdAt'])
+        && isShortString(request.resource.data.name, 80)
+        && request.resource.data.createdAt == request.time;
+      allow update: if isOwner()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name'])
+        && isShortString(request.resource.data.name, 80);
+      allow delete: if isOwner();
     }
 
     // The mailbox: the Console only queues operator messages; replies and

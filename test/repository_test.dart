@@ -159,6 +159,66 @@ void main() {
     expect(() => repo.rename(id, '   '), throwsArgumentError);
   });
 
+  test('a renamed topic is kept from the namer; filing sets project and purpose', () async {
+    final id = await repo.startThread(agent: 'genie', text: 'hello');
+    await repo.rename(id, 'Weekly plan');
+    await repo.setProject(id, 'Financier');
+    await repo.setPurpose(id, ChatPurpose.plan);
+    final raw = (await db.doc('threads/$id').get()).data()!;
+    expect(raw['titleSet'], isTrue);
+    expect(raw['projectSet'], isTrue);
+    final th = threadFrom(id, raw);
+    expect((th.project, th.purpose, th.projectName), ('Financier', ChatPurpose.plan, 'Financier'));
+    await repo.setProject(id, null);
+    expect(threadFrom(id, (await db.doc('threads/$id').get()).data()!).projectName, 'General');
+  });
+
+  test('a new thread is filed when the operator picks a project, else left to the namer', () async {
+    final auto = await repo.startThread(agent: 'genie', text: 'a');
+    final general = await repo.startThread(agent: 'genie', text: 'b', filing: (project: null));
+    final eos = await repo.startThread(agent: 'genie', text: 'c', filing: (project: 'EOS'));
+    expect((await db.doc('threads/$auto').get()).data()!.containsKey('projectSet'), isFalse);
+    expect((await db.doc('threads/$general').get()).data(), allOf(containsPair('project', null), containsPair('projectSet', true)));
+    expect((await db.doc('threads/$eos').get()).data(), allOf(containsPair('project', 'EOS'), containsPair('projectSet', true)));
+  });
+
+  test('the workers\' cost, filing and quota are read', () {
+    final th = threadFrom('t', {
+      'agent': 'genie', 'title': 'Topic', 'project': ' ', 'purpose': 'research', 'costUsd': 0.51,
+      'namedAt': Timestamp.fromDate(DateTime.utc(2026, 11, 16)), 'from': 'roman',
+    });
+    expect((th.project, th.purpose, th.costUsd, th.from), (null, ChatPurpose.research, 0.51, 'roman'));
+    expect(threadFrom('t', {'purpose': 'dance'}).purpose, isNull);
+    final m = messageFrom('m', {
+      'role': 'agent', 'text': 'x',
+      'quota': {'fiveHour': {'utilization': 0.42, 'resetsAt': Timestamp.fromDate(DateTime.utc(2026, 11, 16, 12)), 'status': 'allowed'}},
+    });
+    expect(m.quota!.fiveHour!.utilization, 0.42);
+    expect(m.quota!.fiveHour!.resetsAt!.isAtSameMomentAs(DateTime.utc(2026, 11, 16, 12)), isTrue);
+    expect(m.quota!.sevenDay, isNull);
+    expect(messageFrom('m', {'quota': {'fiveHour': {}}}).quota, isNull);
+  });
+
+  test('chat projects: add, rename (refiling), delete (to General)', () async {
+    await repo.addProject('  Vral   Altos ');
+    var projects = await repo.chatProjects().first;
+    expect(projects.single, isA<ChatProject>().having((p) => p.id, 'id', 'vral-altos').having((p) => p.name, 'name', 'Vral Altos'));
+    expect(() => repo.addProject('vral altos', existing: projects), throwsArgumentError);
+    expect(() => repo.addProject('General'), throwsArgumentError);
+    expect(() => repo.addProject('  '), throwsArgumentError);
+    final a = await repo.startThread(agent: 'genie', text: 'a', filing: (project: 'Vral Altos'));
+    final b = await repo.startThread(agent: 'genie', text: 'b', filing: (project: 'EOS'));
+    await repo.renameProject(projects.single, 'Vral Altos HQ', existing: projects);
+    projects = await repo.chatProjects().first;
+    expect(projects.single.name, 'Vral Altos HQ');
+    expect((await db.doc('threads/$a').get()).data()!['project'], 'Vral Altos HQ');
+    expect((await db.doc('threads/$b').get()).data()!['project'], 'EOS');
+    await repo.deleteProject(projects.single);
+    expect(await repo.chatProjects().first, isEmpty);
+    expect((await db.doc('threads/$a').get()).data()!['project'], isNull);
+    expect(ConsoleRepository.projectId('Café & Co!'), 'caf-co');
+  });
+
   test('only queued and running messages are active', () async {
     for (final (id, status) in [('a', 'queued'), ('b', 'running'), ('c', 'done'), ('d', 'cancelled')]) {
       await db.doc('messages/$id').set({'threadId': 't', 'role': 'operator', 'status': status, 'createdAt': DateTime.utc(2026)});

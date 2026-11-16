@@ -325,7 +325,7 @@ class ComposerState extends ConsumerState<Composer> {
       for (final t in threads.where((t) => !t.archived && t.id != widget.threadId).take(60))
         (
           mention: MentionRef(kind: MentionKind.thread, id: t.id, label: _label(t.title)),
-          subtitle: 'Conversation · ${agentLabel(t.agent)}${t.updatedAt == null ? '' : ' · ${ago(t.updatedAt, now: now)}'}',
+          subtitle: 'Conversation · ${t.projectName} · ${agentLabel(t.agent)}${t.updatedAt == null ? '' : ' · ${ago(t.updatedAt, now: now)}'}',
         ),
     ];
     int rank(MentionOption o) {
@@ -480,7 +480,7 @@ class ComposerState extends ConsumerState<Composer> {
                       ),
                       if (widget.leading != null) ...[
                         const SizedBox(width: 4),
-                        Flexible(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 200), child: widget.leading!)),
+                        Flexible(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 340), child: widget.leading!)),
                       ],
                       const Spacer(),
                       if (long)

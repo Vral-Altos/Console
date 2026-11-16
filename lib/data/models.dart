@@ -2,9 +2,29 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'models.freezed.dart';
 
+/// What a conversation is for (`threads/{id}.purpose`), as the namer files
+/// it; the Console groups by it.
+enum ChatPurpose {
+  build('Build'),
+  fix('Fix'),
+  research('Research'),
+  plan('Plan'),
+  advice('Advice'),
+  ops('Ops'),
+  admin('Admin'),
+  other('Other');
+
+  const ChatPurpose(this.label);
+  final String label;
+
+  static ChatPurpose? parse(Object? v) => values.where((p) => p.name == v).firstOrNull;
+}
+
 /// A conversation with one agent (`threads/{id}` in the platform database).
+/// [title] is its topic; the Console shows it as [ChatNaming.name].
 @freezed
 abstract class ChatThread with _$ChatThread {
+  const ChatThread._();
   const factory ChatThread({
     required String id,
     required String agent,
@@ -15,7 +35,35 @@ abstract class ChatThread with _$ChatThread {
     @Default(false) bool closed,
     @Default(false) bool pinned,
     @Default(false) bool archived,
+
+    /// A chat project's name; null = General.
+    String? project,
+    ChatPurpose? purpose,
+
+    /// Every reply's API-equivalent cost plus the naming run's (workers).
+    @Default(0) double costUsd,
+
+    /// The namer has filed it (project, purpose, topic).
+    DateTime? namedAt,
+
+    /// The agent that posted it, for a conversation between agents.
+    String? from,
   }) = _ChatThread;
+
+  /// The project it is listed under.
+  String get projectName => project ?? 'General';
+}
+
+/// A project conversations are filed under (`chat_projects/{id}`).
+@freezed
+abstract class ChatProject with _$ChatProject {
+  const factory ChatProject({required String id, required String name, DateTime? createdAt}) = _ChatProject;
+}
+
+/// An account's usage windows when a reply finished (`messages/{id}.quota`).
+@freezed
+abstract class QuotaView with _$QuotaView {
+  const factory QuotaView({UsageView? fiveHour, UsageView? sevenDay}) = _QuotaView;
 }
 
 enum MessageStatus { queued, running, done, failed, cancelled }
@@ -83,6 +131,9 @@ abstract class ChatMessage with _$ChatMessage {
     int? contextTokens,
     int? durationMs,
     String? model,
+
+    /// The account's 5-hour and 7-day usage after the turn.
+    QuotaView? quota,
 
     /// The operator stopped the turn; this is what it had written.
     @Default(false) bool stopped,

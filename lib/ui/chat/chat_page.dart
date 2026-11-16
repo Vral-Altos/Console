@@ -6,6 +6,7 @@ import '../../data/models.dart';
 import '../../data/providers.dart';
 import '../theme.dart';
 import '../widgets.dart';
+import 'chat_naming.dart';
 import 'composer.dart';
 import 'message_tiles.dart';
 import 'thread_sidebar.dart';
@@ -229,15 +230,20 @@ class _ConversationViewState extends ConsumerState<ConversationView> {
           const SizedBox(width: 10),
           Expanded(
             child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(thread?.title ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: text.titleSmall),
+              Text(thread == null ? '' : ChatNaming.name(thread), maxLines: 1, overflow: TextOverflow.ellipsis, style: text.titleSmall),
               Text(
-                [agentLabel(agent), if (thread?.closed ?? false) 'closed', ?description].join(' · '),
+                [agentLabel(agent), ?thread?.purpose?.label, if (thread?.closed ?? false) 'closed', ?description].join(' · '),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: text.labelSmall,
               ),
             ]),
           ),
+          if (thread != null)
+            Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: ChatUsageBar(thread: thread, messages: messages, compact: MediaQuery.sizeOf(context).width < 700),
+            ),
         ],
       ),
       Expanded(
@@ -497,10 +503,21 @@ class NewChatView extends ConsumerWidget {
         hint: 'Message ${agentLabel(agent)}…',
         autofocus: !narrow,
         onSend: (text, attachments, mentions) async {
-          final id = await ref.read(repositoryProvider)!.startThread(agent: agent, text: text, attachments: attachments, mentions: mentions);
+          final id = await ref.read(repositoryProvider)!.startThread(
+            agent: agent,
+            text: text,
+            attachments: attachments,
+            mentions: mentions,
+            filing: ref.read(newChatProjectProvider),
+          );
+          ref.read(newChatProjectProvider.notifier).set(null);
           ref.read(selectedThreadProvider.notifier).select(id);
         },
-        leading: _AgentMenu(selected: agent, agents: [for (final a in agents) a.name]),
+        leading: Row(mainAxisSize: MainAxisSize.min, children: [
+          Flexible(child: _AgentMenu(selected: agent, agents: [for (final a in agents) a.name], compact: narrow)),
+          const SizedBox(width: 6),
+          _ProjectMenu(compact: narrow),
+        ]),
         footnote: 'Enter to send · Shift+Enter for a new line · @ to mention · drop files to attach',
       ),
     ]);
@@ -560,10 +577,59 @@ class _AgentCard extends StatelessWidget {
   }
 }
 
+/// The project a new conversation goes under; Auto lets the namer pick it
+/// after the first reply.
+class _ProjectMenu extends ConsumerWidget {
+  const _ProjectMenu({this.compact = false});
+
+  /// Phone width: the icon only.
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = Tokens.of(context);
+    final filing = ref.watch(newChatProjectProvider);
+    final projects = ref.watch(chatProjectsProvider).value ?? const <ChatProject>[];
+    final label = filing == null ? 'Auto' : filing.project ?? 'General';
+    return PopupMenuButton<String>(
+      key: const Key('new-chat-project'),
+      tooltip: 'Project: $label',
+      onSelected: (v) => ref.read(newChatProjectProvider.notifier).set(switch (v) {
+        '~auto' => null,
+        '~general' => (project: null),
+        _ => (project: v),
+      }),
+      itemBuilder: (_) => [
+        const PopupMenuItem(value: '~auto', child: ListTile(dense: true, leading: Icon(Icons.auto_awesome_outlined), title: Text('Auto'), subtitle: Text('Filed after the first reply'))),
+        for (final p in projects) PopupMenuItem(value: p.name, child: ListTile(dense: true, leading: const Icon(Icons.folder_outlined), title: Text(p.name))),
+        const PopupMenuItem(value: '~general', child: ListTile(dense: true, leading: Icon(Icons.inbox_outlined), title: Text('General'))),
+      ],
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(color: t.sunken, borderRadius: BorderRadius.circular(10)),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(filing == null ? Icons.auto_awesome_outlined : Icons.folder_outlined, size: 16, color: t.muted),
+          if (!compact) ...[
+            const SizedBox(width: 6),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 110),
+              child: Text(label, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.labelLarge),
+            ),
+            Icon(Icons.expand_more, size: 18, color: t.muted),
+          ],
+        ]),
+      ),
+    );
+  }
+}
+
 class _AgentMenu extends ConsumerWidget {
-  const _AgentMenu({required this.selected, required this.agents});
+  const _AgentMenu({required this.selected, required this.agents, this.compact = false});
   final String selected;
   final List<String> agents;
+
+  /// Phone width: the avatar only (the cards above name the agents).
+  final bool compact;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -584,8 +650,10 @@ class _AgentMenu extends ConsumerWidget {
         decoration: BoxDecoration(color: t.sunken, borderRadius: BorderRadius.circular(10)),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           AgentAvatar(agent: selected, size: 18),
-          const SizedBox(width: 8),
-          Flexible(child: Text(agentLabel(selected), overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.labelLarge)),
+          if (!compact) ...[
+            const SizedBox(width: 8),
+            Flexible(child: Text(agentLabel(selected), overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.labelLarge)),
+          ],
           Icon(Icons.expand_more, size: 18, color: t.muted),
         ]),
       ),

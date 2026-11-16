@@ -36,6 +36,7 @@ final repositoryProvider = Provider<ConsoleRepository?>((ref) {
 ConsoleRepository _repo(Ref ref) => ref.watch(repositoryProvider)!;
 
 final threadsProvider = StreamProvider<List<ChatThread>>((ref) => _repo(ref).threads());
+final chatProjectsProvider = StreamProvider<List<ChatProject>>((ref) => _repo(ref).chatProjects());
 final messagesProvider = StreamProvider.family<List<ChatMessage>, String>(
   (ref, threadId) => _repo(ref).messages(threadId),
 );
@@ -122,6 +123,27 @@ void openChat(WidgetRef ref, {String? threadId, String? agent}) {
   if (agent != null) ref.read(newChatAgentProvider.notifier).set(agent);
   ref.read(selectedThreadProvider.notifier).select(threadId);
   ref.read(pageProvider.notifier).go(ConsolePage.chat);
+}
+
+/// How the conversations are grouped in the sidebar.
+enum ThreadGrouping { recent, project, purpose }
+
+final threadGroupingProvider = NotifierProvider<ThreadGroupingNotifier, ThreadGrouping>(ThreadGroupingNotifier.new);
+
+class ThreadGroupingNotifier extends Notifier<ThreadGrouping> {
+  @override
+  ThreadGrouping build() => ThreadGrouping.project;
+  void set(ThreadGrouping g) => state = g;
+}
+
+/// The project a new conversation is filed under: null = let the namer
+/// choose; `(project: null)` = General.
+final newChatProjectProvider = NotifierProvider<NewChatProject, ({String? project})?>(NewChatProject.new);
+
+class NewChatProject extends Notifier<({String? project})?> {
+  @override
+  ({String? project})? build() => null;
+  void set(({String? project})? filing) => state = filing;
 }
 
 /// Unsent text per conversation (key `new` for a new one), kept while the

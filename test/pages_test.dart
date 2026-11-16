@@ -14,6 +14,7 @@ import 'package:va_console/ui/chat/code_highlight.dart';
 import 'package:va_console/ui/chat/composer.dart';
 import 'package:va_console/ui/chat/markdown_view.dart';
 import 'package:va_console/ui/chat/message_tiles.dart';
+import 'package:va_console/ui/chat/chat_naming.dart';
 import 'package:va_console/ui/chat/thread_sidebar.dart';
 import 'package:va_console/ui/logs_page.dart';
 import 'package:va_console/ui/overview_page.dart';
@@ -67,10 +68,12 @@ List overridesWith({
   List<Approval> approvals = const [],
   List<LogEntry> logs = const [],
   List<MetricHour> metrics = const [],
+  List<ChatProject> projects = const [],
 }) {
   final h = hosts ?? {'mac': macStatus()};
   return [
     threadsProvider.overrideWith((ref) => Stream.value(threads)),
+    chatProjectsProvider.overrideWith((ref) => Stream.value(projects)),
     activeMessagesProvider.overrideWith((ref) => Stream.value(active)),
     allStatusProvider.overrideWith((ref) => Stream.value(h)),
     macStatusProvider.overrideWith((ref) => Stream.value(h['mac'])),
@@ -199,7 +202,8 @@ void main() {
       ChatMessage(id: '1', threadId: 't1', fromOperator: true, text: 'q1', status: MessageStatus.done, createdAt: now),
       ChatMessage(
         id: '2', threadId: 't1', fromOperator: false, text: '**a1** with `code`', placement: 'mac', accountId: 'pers',
-        costUsd: .05, outputTokens: 1200, durationMs: 4200, model: 'claude-opus-5-5', tools: const ['Read', 'Read'], createdAt: now,
+        costUsd: .05, outputTokens: 1200, contextTokens: 18400, durationMs: 4200, model: 'claude-opus-5-5', tools: const ['Read', 'Read'], createdAt: now,
+        quota: QuotaView(fiveHour: UsageView(utilization: .42, resetsAt: now.add(const Duration(hours: 2))), sevenDay: const UsageView(utilization: .18)),
       ),
       ChatMessage(id: '3', threadId: 't1', fromOperator: true, text: 'q2', status: MessageStatus.failed, error: 'No Claude account', createdAt: now),
       ChatMessage(id: '4', threadId: 't1', fromOperator: true, text: 'q3', status: MessageStatus.cancelled, createdAt: now),
@@ -210,12 +214,27 @@ void main() {
       ),
     ];
     await tester.pumpWidget(host(const ConversationView(threadId: 't1'), [
-      ...overridesWith(threads: const [ChatThread(id: 't1', agent: 'financier', title: 'Budget')]),
+      ...overridesWith(
+        threads: [ChatThread(id: 't1', agent: 'financier', title: 'Budget', project: 'Financier', purpose: ChatPurpose.plan, costUsd: 1.234, createdAt: DateTime.utc(2026, 11, 16, 3))],
+        mesh: MeshView(accounts: [
+          AccountView(id: 'pers', label: 'Personal', fiveHour: const UsageView(utilization: .61), sevenDay: const UsageView(utilization: .2)),
+        ]),
+      ),
       messagesProvider('t1').overrideWith((ref) => Stream.value(messages)),
     ]));
     await tester.pump();
     expect(find.textContaining('a1'), findsWidgets);
-    expect(find.textContaining('Mac · pers · Opus 5.5 · 1.2k tokens · \$0.05 · 4s'), findsOneWidget);
+    // Each reply: model, tokens, cost and the quota after it, always shown.
+    expect(find.text('Opus 5.5 · 18k context · 1.2k out · \$0.05 · 5h 42% · 7d 18%'), findsOneWidget);
+    expect(find.textContaining('Mac · pers · 4s'), findsOneWidget);
+    // The header: the conversation's name, its model, the account's live quota and the total.
+    expect(find.text('[Financier] (\$1.23) 16/11: Budget'), findsOneWidget);
+    expect(find.textContaining('Plan'), findsWidgets);
+    await tester.pump(); // The registry's snapshot arrives.
+    expect(find.byType(QuotaChip), findsNWidgets(2));
+    expect(find.text('61%'), findsOneWidget, reason: 'live usage beats the reply\'s snapshot');
+    expect(find.text('Opus 5.5'), findsOneWidget);
+    expect(find.text('\$1.23'), findsOneWidget);
     // Tools fold to one line and open to the list.
     expect(find.text('Used Read ×2 · 4s'), findsOneWidget);
     expect(find.text('Read ×2'), findsNothing);
@@ -229,7 +248,6 @@ void main() {
     expect(find.textContaining('Using consult (va-mesh)'), findsOneWidget);
     expect(find.textContaining('Writing now'), findsOneWidget);
     expect(find.byTooltip('Stop'), findsOneWidget, reason: 'the composer stops the running turn');
-    expect(find.text('Budget'), findsOneWidget);
     await tester.pump(const Duration(seconds: 2));
     expect(tester.takeException(), isNull);
   });
@@ -366,6 +384,58 @@ void main() {
     expect(find.text('Your personal assistant'), findsOneWidget);
     expect(find.text('On the Mac'), findsNWidgets(2));
     expect(find.byTooltip('Send'), findsOneWidget);
+  });
+
+  test('a conversation is named [PROJECT] (COST) DD/MM: TOPIC', () {
+    // 23:30 UTC on the 15th is the 16th in Singapore.
+    final th = ChatThread(id: 't', agent: 'g', title: 'Dividend tax', project: 'Financier', costUsd: .42, createdAt: DateTime.utc(2026, 11, 15, 23, 30));
+    expect(ChatNaming.name(th), '[Financier] (\$0.42) 16/11: Dividend tax');
+    expect(ChatNaming.name(th.copyWith(project: null, costUsd: 0, title: ' ')), '[General] (\$0) 16/11: Untitled');
+    expect(ChatNaming.name(th.copyWith(costUsd: .004)), '[Financier] (<\$0.01) 16/11: Dividend tax');
+  });
+
+  test('conversations group by project or purpose; General and unfiled last, pinned first', () {
+    final n = DateTime(2026, 11, 4, 12);
+    final threads = [
+      ChatThread(id: 'g', agent: 'g', title: 'g', updatedAt: n),
+      ChatThread(id: 'f1', agent: 'g', title: 'f1', project: 'Financier', purpose: ChatPurpose.plan, updatedAt: n.subtract(const Duration(days: 2))),
+      ChatThread(id: 'f2', agent: 'g', title: 'f2', project: 'Financier', pinned: true, updatedAt: n.subtract(const Duration(days: 9))),
+      ChatThread(id: 'e', agent: 'g', title: 'e', project: 'EOS', purpose: ChatPurpose.research, updatedAt: n.subtract(const Duration(days: 1))),
+    ];
+    String show(List<(String, List<ChatThread>)> gs) => [for (final (k, l) in gs) '$k:${l.map((t) => t.id).join(',')}'].join(' ');
+    expect(show(ThreadSidebarGroups.by(ThreadGrouping.project, threads, n)), 'EOS:e Financier:f2,f1 General:g');
+    expect(show(ThreadSidebarGroups.by(ThreadGrouping.purpose, threads, n)), 'Research:e Plan:f1 Not filed yet:f2,g');
+  });
+
+  testWidgets('the sidebar groups by project with counts and cost, folds, and regroups', (tester) async {
+    size(tester, const Size(1300, 900));
+    final threads = [
+      ChatThread(id: 'a', agent: 'genie', title: 'Rebalance', project: 'Financier', purpose: ChatPurpose.advice, costUsd: .5, createdAt: now, updatedAt: now),
+      ChatThread(id: 'b', agent: 'genie', title: 'Tax', project: 'Financier', purpose: ChatPurpose.research, costUsd: .25, createdAt: now, updatedAt: now),
+      ChatThread(id: 'c', agent: 'tucson', title: 'Schedule', purpose: ChatPurpose.admin, costUsd: .1, createdAt: now, updatedAt: now),
+    ];
+    await tester.pumpWidget(host(const ThreadSidebar(), overridesWith(threads: threads, projects: const [ChatProject(id: 'financier', name: 'Financier')])));
+    await tester.pump();
+    final d = ChatNaming.day(now);
+    expect(find.text('Financier'), findsOneWidget);
+    expect(find.text('2 · \$0.75'), findsOneWidget);
+    expect(find.text('General'), findsOneWidget);
+    expect(find.text('[Financier] (\$0.50) $d: Rebalance'), findsOneWidget);
+    expect(find.text('[General] (\$0.10) $d: Schedule'), findsOneWidget);
+    await tester.tap(find.text('Financier'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('[Financier] (\$0.50) $d: Rebalance'), findsNothing, reason: 'folded');
+    await tester.tap(find.text('Purpose'));
+    await tester.pump(const Duration(milliseconds: 300));
+    for (final g in ['Advice', 'Research', 'Admin']) {
+      expect(find.text(g), findsOneWidget);
+    }
+    expect(find.text('[Financier] (\$0.50) $d: Rebalance'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('manage-projects')));
+    await tester.pumpAndSettle();
+    expect(find.text('2 conversations · \$0.75'), findsOneWidget);
+    expect(find.text('1 conversation · \$0.10'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   test('conversations group by pinned, then by age', () {

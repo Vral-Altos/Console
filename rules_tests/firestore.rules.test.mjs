@@ -130,9 +130,48 @@ describe('threads', () => {
     await assertFails(deleteDoc(doc(owner(), 'threads/t1')));
   });
 
+  test('the operator files a thread: project, purpose, topic', async () => {
+    await assertSucceeds(setDoc(doc(owner(), 'threads/p'), thread({ project: 'Financier', projectSet: true })));
+    await assertSucceeds(updateDoc(doc(owner(), 'threads/t1'), { project: 'EOS', projectSet: true }));
+    await assertSucceeds(updateDoc(doc(owner(), 'threads/t1'), { project: null, projectSet: true }));
+    await assertSucceeds(updateDoc(doc(owner(), 'threads/t1'), { purpose: 'research' }));
+    await assertSucceeds(updateDoc(doc(owner(), 'threads/t1'), { title: 'Topic', titleSet: true }));
+  });
+
+  test('bad filing, and the costs and names only workers write, are refused', async () => {
+    await assertFails(setDoc(doc(owner(), 'threads/p'), thread({ project: '' })));
+    await assertFails(setDoc(doc(owner(), 'threads/p'), thread({ costUsd: 0 })));
+    await assertFails(updateDoc(doc(owner(), 'threads/t1'), { project: 'x'.repeat(81) }));
+    await assertFails(updateDoc(doc(owner(), 'threads/t1'), { purpose: 'dance' }));
+    await assertFails(updateDoc(doc(owner(), 'threads/t1'), { titleSet: 'yes' }));
+    await assertFails(updateDoc(doc(owner(), 'threads/t1'), { costUsd: 0 }));
+    await assertFails(updateDoc(doc(owner(), 'threads/t1'), { namedAt: new Date() }));
+    await assertFails(updateDoc(doc(stranger(), 'threads/t1'), { project: 'EOS' }));
+  });
+
   test('strangers cannot start threads', async () => {
     await assertFails(setDoc(doc(stranger(), 'threads/x'), thread()));
     await assertFails(setDoc(doc(anonymous(), 'threads/x'), thread()));
+  });
+});
+
+describe('chat projects', () => {
+  test('the operator adds, renames and deletes projects', async () => {
+    await assertSucceeds(setDoc(doc(owner(), 'chat_projects/eos'), { name: 'EOS', createdAt: serverTimestamp() }));
+    await assertSucceeds(getDocs(collection(owner(), 'chat_projects')));
+    await assertSucceeds(updateDoc(doc(owner(), 'chat_projects/eos'), { name: 'EOS NewsFrontier' }));
+    await assertSucceeds(deleteDoc(doc(owner(), 'chat_projects/eos')));
+  });
+
+  test('malformed projects and other people are refused', async () => {
+    await assertFails(setDoc(doc(owner(), 'chat_projects/a'), { name: '', createdAt: serverTimestamp() }));
+    await assertFails(setDoc(doc(owner(), 'chat_projects/b'), { name: 'B', createdAt: serverTimestamp(), colour: 1 }));
+    await assertFails(setDoc(doc(owner(), 'chat_projects/c'), { name: 'C', createdAt: new Date(0) }));
+    await assertSucceeds(setDoc(doc(owner(), 'chat_projects/d'), { name: 'D', createdAt: serverTimestamp() }));
+    await assertFails(updateDoc(doc(owner(), 'chat_projects/d'), { createdAt: new Date(0) }));
+    await assertFails(setDoc(doc(stranger(), 'chat_projects/e'), { name: 'E', createdAt: serverTimestamp() }));
+    await assertFails(getDocs(collection(stranger(), 'chat_projects')));
+    await assertFails(deleteDoc(doc(stranger(), 'chat_projects/d')));
   });
 });
 

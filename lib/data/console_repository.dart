@@ -7,7 +7,8 @@ import 'models.dart';
 
 /// Every read and write the Console makes, against the platform database.
 /// The Console creates threads, queued operator messages and Factory
-/// requests; it may rename, pin and archive threads, cancel a queued message
+/// requests; it may rename, pin, archive and file threads (project,
+/// purpose), keep the chat projects, cancel a queued message
 /// or ask a running one to stop, and decide approvals. The workers do the
 /// rest (`meshes/agent_mesh`, Mailbox). `firestore.rules` allows exactly
 /// these writes.
@@ -18,6 +19,7 @@ class ConsoleRepository {
 
   CollectionReference<Map<String, dynamic>> get _threads => _db.collection('threads');
   CollectionReference<Map<String, dynamic>> get _messages => _db.collection('messages');
+  CollectionReference<Map<String, dynamic>> get _projects => _db.collection('chat_projects');
 
   Stream<List<ChatThread>> threads() => _threads
       .orderBy('updatedAt', descending: true)
@@ -44,6 +46,8 @@ class ConsoleRepository {
     required String text,
     List<AttachmentRef> attachments = const [],
     List<MentionRef> mentions = const [],
+    /// Filed by the operator (project null = General); null = the namer files it.
+    ({String? project})? filing,
   }) async {
     final ref = _threads.doc();
     final batch = _db.batch()
@@ -53,6 +57,7 @@ class ConsoleRepository {
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
         'closed': false,
+        if (filing != null) ...{'project': filing.project, 'projectSet': true},
       })
       ..set(_messages.doc(), _queued(ref.id, text, 'turn', attachments: attachments, mentions: mentions));
     await batch.commit();
@@ -112,9 +117,78 @@ class ConsoleRepository {
   Future<void> rename(String threadId, String title) {
     final t = title.replaceAll(RegExp(r'\s+'), ' ').trim();
     if (t.isEmpty) throw ArgumentError('A title cannot be empty.');
-    return _threads.doc(threadId).update({'title': t.length <= 200 ? t : t.substring(0, 200)}).then(
+    return _threads.doc(threadId).update({'title': t.length <= 200 ? t : t.substring(0, 200), 'titleSet': true}).then(
       (_) => unawaited(_audit('Renamed a conversation', {'threadId': threadId, 'title': t})),
     );
+  }
+
+  /// Files [threadId] under [project] (null: General); the namer leaves it.
+  Future<void> setProject(String threadId, String? project) async {
+    await _threads.doc(threadId).update({'project': project, 'projectSet': true});
+    unawaited(_audit('Filed a conversation', {'threadId': threadId, 'project': project ?? 'General'}));
+  }
+
+  Future<void> setPurpose(String threadId, ChatPurpose purpose) async {
+    await _threads.doc(threadId).update({'purpose': purpose.name});
+    unawaited(_audit('Set a conversation\'s purpose', {'threadId': threadId, 'purpose': purpose.name}));
+  }
+
+  /// The projects conversations are filed under, by name.
+  Stream<List<ChatProject>> chatProjects() => _projects.snapshots().map((s) {
+    final list = [for (final d in s.docs) chatProjectFrom(d.id, d.data())];
+    return list..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+  });
+
+  static String _projectName(String name) {
+    final n = name.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (n.isEmpty) throw ArgumentError('A project needs a name.');
+    if (n.length > 80) throw ArgumentError('At most 80 characters.');
+    if (n.toLowerCase() == 'general') throw ArgumentError('"General" is where unfiled conversations go.');
+    return n;
+  }
+
+  /// A document id for a project name (`Vral Altos` → `vral-altos`).
+  static String projectId(String name) {
+    final id = name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-').replaceAll(RegExp(r'^-+|-+$'), '');
+    return id.isEmpty ? 'project' : id;
+  }
+
+  Future<void> addProject(String name, {List<ChatProject> existing = const []}) async {
+    final n = _projectName(name);
+    if (existing.any((p) => p.name.toLowerCase() == n.toLowerCase())) throw ArgumentError('"$n" already exists.');
+    var id = projectId(n);
+    for (var i = 2; existing.any((p) => p.id == id); i++) {
+      id = '${projectId(n)}-$i';
+    }
+    await _projects.doc(id).set({'name': n, 'createdAt': FieldValue.serverTimestamp()});
+    unawaited(_audit('Added a chat project', {'project': n}));
+  }
+
+  /// Renames [project] and refiles its conversations under the new name.
+  Future<void> renameProject(ChatProject project, String name, {List<ChatProject> existing = const []}) async {
+    final n = _projectName(name);
+    if (n == project.name) return;
+    if (existing.any((p) => p.id != project.id && p.name.toLowerCase() == n.toLowerCase())) {
+      throw ArgumentError('"$n" already exists.');
+    }
+    final filed = await _threads.where('project', isEqualTo: project.name).get();
+    final batch = _db.batch()..update(_projects.doc(project.id), {'name': n});
+    for (final d in filed.docs) {
+      batch.update(d.reference, {'project': n});
+    }
+    await batch.commit();
+    unawaited(_audit('Renamed a chat project', {'from': project.name, 'to': n, 'threads': filed.size}));
+  }
+
+  /// Deletes [project]; its conversations move to General.
+  Future<void> deleteProject(ChatProject project) async {
+    final filed = await _threads.where('project', isEqualTo: project.name).get();
+    final batch = _db.batch()..delete(_projects.doc(project.id));
+    for (final d in filed.docs) {
+      batch.update(d.reference, {'project': null});
+    }
+    await batch.commit();
+    unawaited(_audit('Deleted a chat project', {'project': project.name, 'threads': filed.size}));
   }
 
   Future<void> setPinned(String threadId, bool pinned) async {
@@ -372,7 +446,32 @@ ChatThread threadFrom(String id, Map<String, dynamic> d) => ChatThread(
   closed: d['closed'] as bool? ?? false,
   pinned: d['pinned'] as bool? ?? false,
   archived: d['archived'] as bool? ?? false,
+  project: switch ((d['project'] as String?)?.trim()) {
+    final String p when p.isNotEmpty => p,
+    _ => null,
+  },
+  purpose: ChatPurpose.parse(d['purpose']),
+  costUsd: _double(d['costUsd']) ?? 0,
+  namedAt: _time(d['namedAt']),
+  from: d['from'] as String?,
 );
+
+ChatProject chatProjectFrom(String id, Map<String, dynamic> d) =>
+    ChatProject(id: id, name: (d['name'] as String? ?? id).trim(), createdAt: _time(d['createdAt']));
+
+UsageView? _window(Object? v) => v is Map && v['utilization'] is num
+    ? UsageView(
+        utilization: (v['utilization'] as num).toDouble(),
+        resetsAt: _time(v['resetsAt']),
+        status: v['status'] as String?,
+      )
+    : null;
+
+QuotaView? _quota(Object? v) {
+  if (v is! Map) return null;
+  final q = QuotaView(fiveHour: _window(v['fiveHour']), sevenDay: _window(v['sevenDay']));
+  return q.fiveHour == null && q.sevenDay == null ? null : q;
+}
 
 ChatMessage messageFrom(String id, Map<String, dynamic> d) => ChatMessage(
   id: id,
@@ -397,6 +496,7 @@ ChatMessage messageFrom(String id, Map<String, dynamic> d) => ChatMessage(
   contextTokens: _int(d['contextTokens']),
   durationMs: _int(d['durationMs']),
   model: d['model'] as String?,
+  quota: _quota(d['quota']),
   stopped: d['stopped'] as bool? ?? false,
   attachments: [
     for (final a in d['attachments'] as List? ?? const [])
