@@ -1,7 +1,7 @@
 # Vral Altos Console
 
 The operator's web front door to Vral Altos (Flutter web, Firebase Hosting
-site `va-console` in `vral-altos`): **https://va-console.web.app**.
+site `va-console` in `vral-altos`): **https://console.vraltos.dev** (also https://va-console.web.app).
 
 - **Overview** — live activity and approvals, KPIs (turns today, chat cost,
   GCP spend), hosts' CPU/memory/disk, active tasks, usage, Claude limits,
