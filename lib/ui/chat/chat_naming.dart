@@ -46,7 +46,8 @@ class ChatUsageBar extends ConsumerWidget {
   final ChatThread thread;
   final List<ChatMessage> messages;
 
-  /// Phone width: the cost and the tightest window only.
+  /// Phone width: the tightest quota window only (the cost is in the name;
+  /// each reply lists the rest).
   final bool compact;
 
   @override
@@ -65,6 +66,7 @@ class ChatUsageBar extends ConsumerWidget {
         QuotaChip(window: '5h', usage: fiveHour, account: account?.label ?? last?.accountId),
       if (sevenDay != null && (!compact || (fiveHour?.utilization ?? 0) < sevenDay.utilization))
         QuotaChip(window: '7d', usage: sevenDay, account: account?.label ?? last?.accountId),
+      if (!compact)
       UsageChip(
         icon: Icons.payments_outlined,
         label: usd(thread.costUsd),

@@ -234,9 +234,11 @@ class _ThreadTileState extends ConsumerState<ThreadTile> {
                     Tooltip(
                       message: ChatNaming.name(th),
                       waitDuration: const Duration(milliseconds: 700),
+                      // Two lines: the [Project] (cost) DD/MM prefix would
+                      // otherwise leave no room for the topic.
                       child: Text(
                         ChatNaming.name(th),
-                        maxLines: 1,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: text.bodyMedium?.copyWith(fontWeight: widget.selected ? FontWeight.w600 : FontWeight.w500),
                       ),

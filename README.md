@@ -42,6 +42,21 @@ hides the conversations; in the message box Enter sends, Shift+Enter breaks
 the line, Esc stops the running turn and ↑ (in an empty box) edits the last
 message.
 
+Chat filing and usage: every conversation is named
+`[PROJECT] (TOTAL COST) DD/MM: TOPIC` (`lib/ui/chat/chat_naming.dart`), from the
+thread's project, the workers' running cost, its start day (UTC+8) and its
+topic. After the first reply the worker's `ChatNamer` (agent_mesh) asks Haiku
+for the project (from `chat_projects`), purpose and topic; the operator can
+pick the project when starting (Auto / a project / General) and refile, set
+the purpose or rename the topic from the conversation menu, which the namer
+then leaves alone. The sidebar groups by Project (default), Purpose or Recent;
+each group folds and shows its count and cost. The folder button keeps the
+projects (add, rename — refiles — and delete → General). The header shows the
+last reply's model, its account's live 5-hour and 7-day quota and the chat's
+total; each reply shows its model, context and output tokens, cost and the
+quota after it. `e2e/filing_e2e.py` (same setup as below, an empty Firestore
+emulator) drives it with a real worker.
+
 Chat details: replies stream with a caret (an open code fence renders as code
 while it arrives); the tools a turn used fold into one line that opens to the
 list; fenced code is syntax-coloured (`lib/ui/chat/code_highlight.dart`, a

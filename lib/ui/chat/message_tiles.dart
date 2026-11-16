@@ -240,8 +240,8 @@ class AgentReply extends StatelessWidget {
                 ),
               MarkdownView(data: m.text),
               const SizedBox(height: 6),
-              SizedBox(
-                height: 32,
+              ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 32),
                 child: Row(
                   children: [
                     AnimatedOpacity(
@@ -269,6 +269,7 @@ class AgentReply extends StatelessWidget {
                             child: Text(
                               usage,
                               key: const Key('reply-usage'),
+                              maxLines: 2,
                               style: text.labelSmall?.copyWith(color: t.muted, fontFeatures: const [FontFeature.tabularFigures()]),
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -282,14 +283,11 @@ class AgentReply extends StatelessWidget {
                               child: Icon(Icons.info_outline, size: 13, color: t.faint),
                             ),
                           ),
-                        if (meta.isNotEmpty)
+                        // Where and when, on hover only: hidden, it takes no
+                        // room from the usage.
+                        if (meta.isNotEmpty && hover)
                           Flexible(
-                            child: AnimatedOpacity(
-                              duration: const Duration(milliseconds: 140),
-                              opacity: hover ? 1 : 0,
-                              alwaysIncludeSemantics: true,
-                              child: Text('  $meta', style: text.labelSmall?.copyWith(color: t.faint), overflow: TextOverflow.ellipsis),
-                            ),
+                            child: Text('  $meta', style: text.labelSmall?.copyWith(color: t.faint), overflow: TextOverflow.ellipsis),
                           ),
                       ]),
                     ),
