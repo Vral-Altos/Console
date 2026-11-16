@@ -313,6 +313,7 @@ class ConsoleRepository {
     required String devstationId,
     String? project,
     String? machineType,
+    int? diskGb,
     String? repoUrl,
   }) => _db.collection('factory_requests').doc().set({
     'action': action,
@@ -321,6 +322,7 @@ class ConsoleRepository {
       'project': project,
       'machineType': machineType,
       'repoUrl': repoUrl ?? '',
+      'diskGb': ?diskGb,
     },
     'status': 'queued',
     'createdAt': FieldValue.serverTimestamp(),
@@ -329,6 +331,7 @@ class ConsoleRepository {
     'devstation': devstationId,
     'project': ?project,
     'machineType': ?machineType,
+    'diskGb': ?diskGb,
   })));
 
   Stream<List<Approval>> approvals() => _db
@@ -521,10 +524,12 @@ Devstation devstationFrom(String id, Map<String, dynamic> d) => Devstation(
   state: d['state'] as String? ?? 'unknown',
   desired: d['desired'] as String? ?? 'running',
   machineType: d['machineType'] as String?,
+  diskGb: (d['diskGb'] as num?)?.toInt(),
   zone: d['zone'] as String?,
   repoUrl: d['repoUrl'] as String?,
   instance: d['instance'] as String?,
   ip: d['ip'] as String?,
+  identity: d['identity'] as String?,
   error: d['error'] as String?,
   createdAt: _time(d['createdAt']),
   updatedAt: _time(d['updatedAt']),

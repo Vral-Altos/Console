@@ -312,6 +312,11 @@ void main() {
     await repo.send(id, 'more');
     await repo.setPinned(id, true);
     await repo.requestFactory(action: 'stop', devstationId: 'atlas');
+    await repo.requestFactory(action: 'create', devstationId: 'citadel', project: 'Citadel Platform',
+        machineType: 'e2-standard-4', diskGb: 60, repoUrl: '');
+    final create = (await db.collection('factory_requests').where('devstationId', isEqualTo: 'citadel').get()).docs.single.data();
+    expect(create.keys.toSet(), {'action', 'devstationId', 'project', 'machineType', 'diskGb', 'repoUrl', 'status', 'createdAt'});
+    expect(create['diskGb'], 60);
     await Future<void>.delayed(Duration.zero);
     final logs = (await db.collection('logs').get()).docs.map((d) => d.data()).toList();
     expect(logs.map((l) => l['message']), containsAll([

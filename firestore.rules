@@ -156,7 +156,7 @@ service cloud.firestore {
       allow read: if isOwner();
       allow create: if isOwner()
         && request.resource.data.keys().hasOnly(
-             ['action', 'devstationId', 'project', 'machineType', 'repoUrl', 'status', 'createdAt'])
+             ['action', 'devstationId', 'project', 'machineType', 'diskGb', 'repoUrl', 'status', 'createdAt'])
         && request.resource.data.action in ['create', 'start', 'stop', 'destroy']
         && request.resource.data.devstationId.matches('^[a-z][a-z0-9-]{1,19}$')
         && request.resource.data.status == 'queued'
@@ -165,7 +165,10 @@ service cloud.firestore {
              request.resource.data.project.matches('^[A-Za-z0-9][A-Za-z0-9 ._-]{0,79}$')
              && request.resource.data.machineType in ['e2-medium', 'e2-standard-2', 'e2-standard-4', 'e2-standard-8']
              && request.resource.data.repoUrl is string
-             && request.resource.data.repoUrl.size() <= 300));
+             && request.resource.data.repoUrl.size() <= 300
+             && (!('diskGb' in request.resource.data)
+                 || (request.resource.data.diskGb is int
+                     && request.resource.data.diskGb >= 30 && request.resource.data.diskGb <= 200))));
       allow update, delete: if false;
     }
 

@@ -235,7 +235,7 @@ class DevstationCard extends ConsumerWidget {
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(d.project, style: text.titleSmall, overflow: TextOverflow.ellipsis),
-                Text([d.id, ?d.machineType, ?d.zone].join(' · '), style: text.labelSmall, overflow: TextOverflow.ellipsis),
+                Text([d.id, ?d.machineType, if (d.diskGb != null) '${d.diskGb} GB', ?d.zone].join(' · '), style: text.labelSmall, overflow: TextOverflow.ellipsis),
               ]),
             ),
           ]),
@@ -257,6 +257,7 @@ class DevstationCard extends ConsumerWidget {
               const SizedBox(height: 8),
             ],
             if (d.repoUrl?.isNotEmpty ?? false) KeyValue('Repository', d.repoUrl!, mono: true),
+            if (d.identity != null) KeyValue('Runs as', d.identity!.split('@').first, mono: true),
             if (worker?.claudeVersion != null) KeyValue('Claude Code', worker!.claudeVersion!.split(' ').first),
             if (d.createdAt != null) KeyValue('Created', ago(d.createdAt)),
           ],
@@ -339,6 +340,7 @@ class _NewDevstationDialogState extends ConsumerState<NewDevstationDialog> {
   final _project = TextEditingController();
   final _repo = TextEditingController();
   String _machine = 'e2-standard-2';
+  int _disk = 30;
   bool _busy = false;
   String? _error;
 
@@ -369,6 +371,7 @@ class _NewDevstationDialogState extends ConsumerState<NewDevstationDialog> {
         devstationId: _id.text.trim(),
         project: _project.text.trim(),
         machineType: _machine,
+        diskGb: _disk,
         repoUrl: _repo.text.trim(),
       );
       if (mounted) Navigator.pop(context);
@@ -405,7 +408,7 @@ class _NewDevstationDialogState extends ConsumerState<NewDevstationDialog> {
           const SizedBox(height: 14),
           TextFormField(
             controller: _repo,
-            decoration: const InputDecoration(labelText: 'Git repository (optional, public https)'),
+            decoration: const InputDecoration(labelText: 'Git repository (optional, https)'),
             validator: (v) {
               final t = v?.trim() ?? '';
               return t.isEmpty || RegExp(r'^https://[A-Za-z0-9.-]+/[A-Za-z0-9._/-]+$').hasMatch(t)
@@ -422,6 +425,19 @@ class _NewDevstationDialogState extends ConsumerState<NewDevstationDialog> {
                 DropdownMenuItem(value: e.key, child: Text('${e.key} — ${e.value}')),
             ],
             onChanged: (v) => setState(() => _machine = v ?? _machine),
+          ),
+          const SizedBox(height: 14),
+          DropdownButtonFormField<int>(
+            key: const Key('devstation-disk'),
+            initialValue: _disk,
+            decoration: const InputDecoration(
+              labelText: 'Disk',
+              helperText: 'Kept while stopped (~US\$0.10 per GB a month).',
+            ),
+            items: [
+              for (final gb in const [30, 60, 100, 200]) DropdownMenuItem(value: gb, child: Text('$gb GB')),
+            ],
+            onChanged: (v) => setState(() => _disk = v ?? _disk),
           ),
           if (_error != null)
             Padding(

@@ -455,7 +455,8 @@ void main() {
     size(tester, const Size(1400, 1600));
     await tester.pumpWidget(host(const ProjectsPage(), overridesWith(
       devstations: const [
-        Devstation(id: 'atlas', project: 'Atlas', state: 'running', desired: 'running', machineType: 'e2-standard-2'),
+        Devstation(id: 'atlas', project: 'Atlas', state: 'running', desired: 'running', machineType: 'e2-standard-2',
+            diskGb: 60, identity: 'va-ds-atlas@vral-altos.iam.gserviceaccount.com'),
         Devstation(id: 'nova', project: 'Nova', state: 'stopped', desired: 'stopped'),
       ],
       requests: const [FactoryRequest(id: 'r', action: 'create', devstationId: 'atlas', status: 'done')],
@@ -473,6 +474,8 @@ void main() {
     expect(find.text('Chat with director'), findsNWidgets(2));
     expect(find.text('Create atlas'), findsOneWidget);
     expect(find.text('2.1.318'), findsOneWidget);
+    expect(find.textContaining('e2-standard-2 · 60 GB'), findsOneWidget);
+    expect(find.text('va-ds-atlas'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

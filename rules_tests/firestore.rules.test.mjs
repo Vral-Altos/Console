@@ -246,6 +246,7 @@ describe('factory', () => {
 
   test('the operator queues create, start, stop and destroy', async () => {
     await assertSucceeds(setDoc(doc(owner(), 'factory_requests/a'), create()));
+    await assertSucceeds(setDoc(doc(owner(), 'factory_requests/disk'), create({ diskGb: 60 })));
     for (const action of ['start', 'stop', 'destroy']) {
       await assertSucceeds(setDoc(doc(owner(), `factory_requests/${action}`),
         { action, devstationId: 'atlas', status: 'queued', createdAt: serverTimestamp() }));
@@ -258,6 +259,7 @@ describe('factory', () => {
       create({ action: 'reboot' }), create({ devstationId: 'Bad_Id' }), create({ status: 'done' }),
       create({ machineType: 'n2-highmem-96' }), create({ project: "x'; rm -rf /" }),
       create({ buildId: 'forged' }), create({ createdAt: new Date(0) }),
+      create({ diskGb: 20 }), create({ diskGb: 500 }), create({ diskGb: '60' }), create({ diskGb: 60.5 }),
     ];
     for (const [i, b] of bad.entries()) await assertFails(setDoc(doc(owner(), `factory_requests/b${i}`), b));
     await assertFails(updateDoc(doc(owner(), 'factory_requests/r1'), { status: 'queued' }));

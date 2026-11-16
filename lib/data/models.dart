@@ -444,9 +444,13 @@ abstract class Devstation with _$Devstation {
     required String state,
     required String desired,
     String? machineType,
+    int? diskGb,
     String? zone,
     String? repoUrl,
     String? instance,
+
+    /// The service account it runs as (`va-ds-<id>` or `va-devstation`).
+    String? identity,
     String? ip,
     String? error,
     DateTime? createdAt,

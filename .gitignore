@@ -10,3 +10,4 @@ rules_tests/node_modules/
 .flutter-plugins
 .flutter-plugins-dependencies
 firebase-debug.log
+firestore-debug.log
