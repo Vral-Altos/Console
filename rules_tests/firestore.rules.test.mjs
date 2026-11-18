@@ -381,4 +381,24 @@ describe('TUCSON plan', () => {
       await assertFails(setDoc(doc(db, 'tucson_plan_placements/c__a'), { canvasId: 'c', nodeId: 'a', x: 0, y: 0 }));
     }
   });
+
+  test('calendar events mirrored into the plan, and TUCSON\'s change log', async () => {
+    const db = owner();
+    await assertSucceeds(setDoc(doc(db, 'tucson_plan_nodes/gcal_1'), node({
+      kind: 'event', source: 'calendar', calendarId: 'primary', eventId: 'ev1', link: 'https://calendar.google.com/x',
+    })));
+    await assertFails(setDoc(doc(db, 'tucson_plan_nodes/gcal_2'), node({ source: 'notion' })));
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'tucson_plan_changes/c1'), { summary: 'Added task', writes: [] });
+      await setDoc(doc(ctx.firestore(), 'tucson_plan_sync/calendar'), { events: 3 });
+    });
+    await assertSucceeds(getDoc(doc(db, 'tucson_plan_changes/c1')));
+    await assertSucceeds(getDoc(doc(db, 'tucson_plan_sync/calendar')));
+    await assertSucceeds(updateDoc(doc(db, 'tucson_plan_changes/c1'), { revertedAt: new Date() }));
+    await assertFails(updateDoc(doc(db, 'tucson_plan_changes/c1'), { summary: 'rewritten' }));
+    await assertFails(setDoc(doc(db, 'tucson_plan_changes/c2'), { summary: 'forged' }));
+    await assertFails(deleteDoc(doc(db, 'tucson_plan_changes/c1')));
+    await assertFails(setDoc(doc(db, 'tucson_plan_sync/calendar'), { events: 0 }));
+    await assertFails(getDoc(doc(stranger(), 'tucson_plan_changes/c1')));
+  });
 });

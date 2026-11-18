@@ -198,14 +198,20 @@ service cloud.firestore {
     }
 
     function isPlanNode(d) {
-      return d.keys().hasOnly(['kind', 'title', 'notes', 'status', 'priority', 'startAt', 'endAt', 'dueAt', 'createdAt', 'updatedAt'])
+      return d.keys().hasOnly(['kind', 'title', 'notes', 'status', 'priority', 'startAt', 'endAt', 'dueAt', 'createdAt', 'updatedAt',
+                               'source', 'calendarId', 'eventId', 'link'])
         && d.kind in ['goal', 'project', 'milestone', 'feature', 'task', 'subtask', 'session', 'event', 'decision', 'note']
         && isText(d.title, 500)
         && isText(d.get('notes', ''), 20000)
         && d.get('status', 'planned') in ['planned', 'active', 'done', 'dropped']
         && d.get('priority', 0) is int && d.get('priority', 0) >= 0 && d.get('priority', 0) <= 3
         && isOptionalTime(d, 'startAt') && isOptionalTime(d, 'endAt') && isOptionalTime(d, 'dueAt')
-        && isOptionalTime(d, 'createdAt') && isOptionalTime(d, 'updatedAt');
+        && isOptionalTime(d, 'createdAt') && isOptionalTime(d, 'updatedAt')
+        // A calendar event mirrored by TUCSON (tools/TUCSON/server, CalendarMirror).
+        && d.get('source', null) in [null, 'calendar']
+        && (d.get('calendarId', null) == null || isText(d.calendarId, 1024))
+        && (d.get('eventId', null) == null || isText(d.eventId, 1024))
+        && (d.get('link', null) == null || isText(d.link, 2048));
     }
 
     function isPlanLink(d) {
@@ -255,6 +261,22 @@ service cloud.firestore {
     match /tucson_plan_placements/{id} {
       allow read, delete: if isOwner();
       allow create, update: if isOwner() && isPlacement(id, request.resource.data);
+    }
+
+    // TUCSON's own edits to the plan (written by tucson_mcp with IAM). The
+    // operator reads them and, after reverting one in the app, marks it.
+    match /tucson_plan_changes/{id} {
+      allow read: if isOwner();
+      allow update: if isOwner()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['revertedAt'])
+        && request.resource.data.revertedAt is timestamp;
+      allow create, delete: if false;
+    }
+
+    // When the calendar mirror last ran, and how it went.
+    match /tucson_plan_sync/{id} {
+      allow read: if isOwner();
+      allow write: if false;
     }
   }
 }
