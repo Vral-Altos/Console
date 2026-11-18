@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:ui_mesh/ui_mesh.dart';
 
 import 'graph.dart';
 import 'layout.dart';
@@ -177,9 +178,11 @@ class TopologyPainter extends CustomPainter {
     return old == null ? z.rect : Rect.lerp(old.rect, z.rect, _ease(t))!;
   }
 
+  static const _base = TextStyle(fontFamily: VaType.family, height: 1.3, leadingDistribution: TextLeadingDistribution.even);
+
   TextPainter _text(String s, TextStyle style) {
     final key = '${style.fontSize}|${style.color?.toARGB32()}|${style.fontWeight?.value}|$s';
-    return labels.putIfAbsent(key, () => TextPainter(text: TextSpan(text: s, style: style), textDirection: TextDirection.ltr)..layout());
+    return labels.putIfAbsent(key, () => TextPainter(text: TextSpan(text: s, style: _base.merge(style)), textDirection: TextDirection.ltr)..layout());
   }
 
   @override
@@ -328,7 +331,7 @@ class TopologyPainter extends CustomPainter {
         if (z.bad > 0) '${z.bad} down',
         if (z.warn > 0) '${z.warn} degraded',
       ].join('  ·  '),
-      TextStyle(fontFamily: mono, fontSize: 10, color: Holo.dim, letterSpacing: .6),
+      TextStyle(fontFamily: mono, fontSize: 12, color: Holo.dim, letterSpacing: .6),
     );
     title.paint(canvas, at + Offset(-title.width / 2, -title.height - sub.height - 10));
     if (camera.zoom >= 12) sub.paint(canvas, at + Offset(-sub.width / 2, -sub.height - 7));
@@ -390,7 +393,7 @@ class TopologyPainter extends CustomPainter {
     final at = Offset.lerp(corners[0], corners[1], .5)! * .5 + far * .5;
     final tp = _text(
       '${z.label.toUpperCase()}${z.bad > 0 ? '  ▲${z.bad}' : ''}',
-      TextStyle(fontFamily: mono, fontSize: 9.5, fontWeight: FontWeight.w700, letterSpacing: 1.6, color: color.withValues(alpha: .9)),
+      TextStyle(fontFamily: mono, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1.6, color: color.withValues(alpha: .9)),
     );
     tp.paint(canvas, at + Offset(-tp.width / 2, -tp.height - 4));
   }

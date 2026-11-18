@@ -8,8 +8,7 @@
   <!-- No viewport-fit=cover: iOS keeps the installed app clear of the notch and home bar. -->
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Vral Altos Console: agents, projects and the running system.">
-  <meta name="theme-color" content="#F6F5F2" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#151514" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#080F19">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
@@ -22,14 +21,13 @@
   <title>Vral Altos Console</title>
   <link rel="manifest" href="manifest.json">
   <style>
-    /* Shown until Flutter paints its first frame, in the Console's colours. */
-    html, body { margin: 0; height: 100%; background: #F6F5F2; }
-    @media (prefers-color-scheme: dark) { html, body { background: #151514; } }
+    /* Shown until Flutter paints its first frame, in the VA colours (one dark theme). */
+    html, body { margin: 0; height: 100%; background: #080F19; }
     #splash { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
       transition: opacity .25s ease; }
     #splash .mark { width: 52px; height: 52px; border-radius: 15px; display: flex; align-items: center;
-      justify-content: center; color: #fff; font: 800 18px/1 system-ui, -apple-system, sans-serif;
-      letter-spacing: .5px; background: linear-gradient(135deg, #4A5BD4, #B4549B);
+      justify-content: center; color: #F1FAEE; font: 800 18px/1 system-ui, -apple-system, sans-serif;
+      letter-spacing: .5px; background: linear-gradient(135deg, #C7003F, #A80035);
       animation: breathe 1.4s ease-in-out infinite alternate; }
     @keyframes breathe { from { opacity: .55; transform: scale(.96); } to { opacity: 1; transform: scale(1); } }
   </style>

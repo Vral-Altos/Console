@@ -8,7 +8,6 @@ import '../data/providers.dart';
 import 'charts.dart';
 import 'hosts.dart';
 import 'projects_page.dart';
-import 'theme.dart';
 import 'widgets.dart';
 
 /// The front page: what is running now, where, at what load and cost.
@@ -50,7 +49,7 @@ class OverviewPage extends ConsumerWidget {
             child: Padding(padding: EdgeInsets.all(18), child: LinearProgressIndicator(minHeight: 2)),
           )
         else
-          ResponsiveGrid(
+          VaResponsiveGrid(
             minWidth: 300,
             maxColumns: 4,
             children: [for (final e in shownHosts) HostCard(id: e.key, status: e.value)],
@@ -90,7 +89,6 @@ class _Greeting extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final t = Tokens.of(context);
     final now = DateTime.now();
     final mac = ref.watch(macStatusProvider).value;
     final approvals = (ref.watch(approvalsProvider).value ?? const <Approval>[]).where((a) => a.status == 'pending').length;
@@ -128,10 +126,10 @@ class _Greeting extends ConsumerWidget {
         runSpacing: 8,
         children: [
           if (ref.watch(macStatusProvider).hasValue)
-            StatusPill(label: on ? 'Agents on the Mac' : 'Agents in the cloud', color: on ? t.ok : t.info),
+            VaStatusPill(label: on ? 'Agents on the Mac' : 'Agents in the cloud', color: on ? VaColors.success : VaColors.info),
           if (approvals > 0)
             ActionChip(
-              avatar: Icon(Icons.gavel, size: 16, color: t.warn),
+              avatar: Icon(Icons.gavel, size: 16, color: VaColors.warning),
               label: Text('$approvals approval${approvals == 1 ? '' : 's'} waiting'),
               onPressed: () => ref.read(pageProvider.notifier).go(ConsolePage.system),
             ),
@@ -153,7 +151,6 @@ class StatTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Tokens.of(context);
     final text = Theme.of(context).textTheme;
     return Card(
       child: ConstrainedBox(
@@ -166,11 +163,11 @@ class StatTile extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  if (icon != null) ...[Icon(icon, size: 16, color: accent ?? t.muted), const SizedBox(width: 6)],
+                  if (icon != null) ...[Icon(icon, size: 16, color: accent ?? VaColors.muted), const SizedBox(width: 6)],
                   Expanded(
                     child: Text(
                       label,
-                      style: text.labelMedium?.copyWith(color: t.muted),
+                      style: text.labelMedium?.copyWith(color: VaColors.muted),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -179,7 +176,7 @@ class StatTile extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 value,
-                style: text.headlineSmall?.copyWith(fontWeight: FontWeight.w600, fontFamily: t.mono, letterSpacing: -.5),
+                style: text.headlineSmall?.copyWith(fontWeight: FontWeight.w600, fontFamily: VaType.mono, letterSpacing: -.5),
               ),
               if (sub != null) ...[
                 const SizedBox(height: 2),
@@ -199,7 +196,6 @@ class _Kpis extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final t = Tokens.of(context);
     final now = DateTime.now();
     final active = ref.watch(activeMessagesProvider).value ?? const <ChatMessage>[];
     final running = active.where((m) => m.status == MessageStatus.running).length;
@@ -221,14 +217,14 @@ class _Kpis extends ConsumerWidget {
     final daysReady = ready(ref.watch(usageDaysProvider)) && ready(ref.watch(usageStatsProvider));
     final billingReady = ready(ref.watch(billingProvider));
     const loading = 'Loading…';
-    return ResponsiveGrid(
+    return VaResponsiveGrid(
       minWidth: 165,
       maxColumns: 4,
       children: [
         StatTile(
           label: 'Live now',
           icon: Icons.bolt,
-          accent: running > 0 ? t.info : null,
+          accent: running > 0 ? VaColors.info : null,
           value: liveReady ? '$running' : '—',
           sub: !liveReady
               ? loading
@@ -250,7 +246,7 @@ class _Kpis extends ConsumerWidget {
           icon: Icons.toll_outlined,
           value: daysReady ? usd(monthCost) : '—',
           sub: !daysReady ? loading : 'API-equivalent (subscription) · ${usd(stats?.costUsd ?? 0)} all time',
-          child: !daysReady ? null : Sparkline(values: [for (final d in series) d.costUsd], height: 28, color: t.series[2]),
+          child: !daysReady ? null : Sparkline(values: [for (final d in series) d.costUsd], height: 28, color: VaColors.series[2]),
         ),
         StatTile(
           label: 'GCP spend this month',
@@ -261,7 +257,7 @@ class _Kpis extends ConsumerWidget {
               : billing == null
               ? 'Waiting for the budget’s first report (a few times a day)'
               : 'Target S\$${target.toStringAsFixed(0)} · budget ${money(billing.budgetAmount, billing.currencyCode)} · ${ago(billing.updatedAt)}',
-          child: billing == null ? null : Meter(value: billing.costAmount / target, warnAt: .66, badAt: 1),
+          child: billing == null ? null : VaMeter(value: billing.costAmount / target, warnAt: .66, badAt: 1),
         ),
       ],
     );
@@ -284,7 +280,6 @@ class ActivityPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final t = Tokens.of(context);
     final text = Theme.of(context).textTheme;
     final threads = {for (final th in ref.watch(threadsProvider).value ?? const <ChatThread>[]) th.id: th};
     final factory = (ref.watch(factoryRequestsProvider).value ?? const <FactoryRequest>[])
@@ -292,22 +287,22 @@ class ActivityPanel extends ConsumerWidget {
         .toList();
     final approvals = (ref.watch(approvalsProvider).value ?? const <Approval>[]).where((a) => a.status == 'pending').toList();
     final repo = ref.read(repositoryProvider);
-    return Panel(
+    return VaPanel(
       title: 'Activity',
       subtitle: 'Live: turns, Factory jobs and approvals',
       icon: Icons.timeline,
-      child: AsyncView(
+      child: VaAsyncView(
         value: ref.watch(activeMessagesProvider),
         data: (active) {
           if (active.isEmpty && factory.isEmpty && approvals.isEmpty) {
-            return const EmptyNote('Nothing running. The agents are idle.', icon: Icons.nightlight_outlined);
+            return const VaEmptyNote('Nothing running. The agents are idle.', icon: Icons.nightlight_outlined);
           }
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               for (final a in approvals)
                 _ActivityRow(
-                  leading: Icon(Icons.gavel, size: 18, color: t.warn),
+                  leading: Icon(Icons.gavel, size: 18, color: VaColors.warning),
                   title: '${a.requestedBy} asks: ${a.action}',
                   subtitle: '${a.details} · ${ago(a.createdAt)}',
                   trailing: repo == null
@@ -344,7 +339,7 @@ class ActivityPanel extends ConsumerWidget {
                 ),
               for (final r in factory)
                 _ActivityRow(
-                  leading: Icon(Icons.precision_manufacturing_outlined, size: 18, color: t.info),
+                  leading: Icon(Icons.precision_manufacturing_outlined, size: 18, color: VaColors.info),
                   title: 'Factory: ${r.action} ${r.devstationId}',
                   subtitle: '${r.status} · ${ago(r.createdAt)}',
                   live: r.status == 'running',
@@ -381,7 +376,6 @@ class _ActivityRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Tokens.of(context);
     final text = Theme.of(context).textTheme;
     return InkWell(
       onTap: onTap,
@@ -409,7 +403,7 @@ class _ActivityRow extends StatelessWidget {
             if (live)
               Padding(
                 padding: const EdgeInsets.only(left: 8),
-                child: StatusDot(color: t.info, pulse: true),
+                child: VaStatusDot(color: VaColors.info, pulse: true),
               ),
             ?trailing,
           ],
@@ -427,16 +421,16 @@ class ActiveTasksPanel extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final text = Theme.of(context).textTheme;
     final threads = {for (final th in ref.watch(threadsProvider).value ?? const <ChatThread>[]) th.id: th};
-    return Panel(
+    return VaPanel(
       title: 'Active tasks',
       subtitle: 'Open agent sessions and their context',
       icon: Icons.task_alt,
-      child: AsyncView(
+      child: VaAsyncView(
         value: ref.watch(meshProvider),
         data: (mesh) {
           final active = [...?mesh?.sessions.where((s) => s.status == 'active')]
             ..sort((a, b) => (b.lastUsedAt ?? DateTime(0)).compareTo(a.lastUsedAt ?? DateTime(0)));
-          if (active.isEmpty) return const EmptyNote('No open sessions.', icon: Icons.task_alt);
+          if (active.isEmpty) return const VaEmptyNote('No open sessions.', icon: Icons.task_alt);
           return Column(
             children: [
               for (final s in active.take(8))
@@ -507,13 +501,12 @@ class _UsagePanelState extends ConsumerState<UsagePanel> {
 
   @override
   Widget build(BuildContext context) {
-    final t = Tokens.of(context);
     final text = Theme.of(context).textTheme;
     final now = DateTime.now();
     final stats = ref.watch(usageStatsProvider).value;
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     String label(String day) => '${int.parse(day.substring(8))} ${months[int.parse(day.substring(5, 7)) - 1]}';
-    return Panel(
+    return VaPanel(
       title: 'Chat usage',
       subtitle: 'Last 14 days (Singapore time)',
       icon: Icons.bar_chart,
@@ -528,7 +521,7 @@ class _UsagePanelState extends ConsumerState<UsagePanel> {
         selected: {_metric},
         onSelectionChanged: (s) => setState(() => _metric = s.first),
       ),
-      child: AsyncView(
+      child: VaAsyncView(
         value: ref.watch(usageDaysProvider),
         data: (days) {
           final series = lastDays(days, now, 14);
@@ -552,14 +545,14 @@ class _UsagePanelState extends ConsumerState<UsagePanel> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (series.every((d) => d.turns == 0 && d.failed == 0))
-                const EmptyNote('No chat turns in the last 14 days.', icon: Icons.bar_chart)
+                const VaEmptyNote('No chat turns in the last 14 days.', icon: Icons.bar_chart)
               else
                 BarChart(
                   bars: bars,
                   color: _metric == _Metric.cost
-                      ? t.series[2]
+                      ? VaColors.series[2]
                       : _metric == _Metric.tokens
-                      ? t.series[1]
+                      ? VaColors.series[1]
                       : null,
                   format: (v) => switch (_metric) {
                     _Metric.turns => '${v.round()} turns',
@@ -583,7 +576,7 @@ class _UsagePanelState extends ConsumerState<UsagePanel> {
                           child: Text(agentLabel(e.key), style: text.bodySmall, overflow: TextOverflow.ellipsis),
                         ),
                         Expanded(
-                          child: Meter(value: total == 0 ? 0 : e.value.turns / total, color: agentColor(context, e.key)),
+                          child: VaMeter(value: total == 0 ? 0 : e.value.turns / total, color: agentColor(context, e.key)),
                         ),
                         const SizedBox(width: 10),
                         SizedBox(
@@ -591,7 +584,7 @@ class _UsagePanelState extends ConsumerState<UsagePanel> {
                           child: Text(
                             '${e.value.turns} · ${usd(e.value.costUsd)}',
                             textAlign: TextAlign.right,
-                            style: text.labelSmall?.copyWith(fontFamily: t.mono),
+                            style: text.labelSmall?.copyWith(fontFamily: VaType.mono),
                           ),
                         ),
                       ],
@@ -612,20 +605,19 @@ class AccountsPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final t = Tokens.of(context);
     final text = Theme.of(context).textTheme;
     final now = DateTime.now();
     final stats = ref.watch(usageStatsProvider).value;
-    return Panel(
+    return VaPanel(
       title: 'Claude accounts',
       subtitle: '5-hour and weekly limits, as Claude Code last reported',
       icon: Icons.account_circle_outlined,
-      child: AsyncView(
+      child: VaAsyncView(
         value: ref.watch(meshProvider),
         data: (mesh) {
           final accounts = mesh?.accounts ?? const <AccountView>[];
           if (accounts.isEmpty) {
-            return const EmptyNote('No account registered. Register one with `va_agent accounts add <id>`.');
+            return const VaEmptyNote('No account registered. Register one with `va_agent accounts add <id>`.');
           }
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -636,7 +628,7 @@ class AccountsPanel extends ConsumerWidget {
                     Text(a.label, style: text.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
                     const SizedBox(width: 8),
                     if (a.limitedUntil != null && a.limitedUntil!.isAfter(now))
-                      StatusPill(label: 'Limited', color: t.bad, dense: true),
+                      VaStatusPill(label: 'Limited', color: VaColors.danger, dense: true),
                     const Spacer(),
                     if (stats?.byAccount[a.id] != null)
                       Text('${stats!.byAccount[a.id]!.turns} chat turns', style: text.labelSmall),
@@ -680,7 +672,7 @@ class _Window extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 4),
-          Meter(value: u?.utilization),
+          VaMeter(value: u?.utilization),
         ],
       ),
     );
@@ -694,16 +686,16 @@ class SpendPanel extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final text = Theme.of(context).textTheme;
-    return Panel(
+    return VaPanel(
       title: 'GCP spend',
       subtitle: 'Month to date, from the Vral Altos budget',
       icon: Icons.payments_outlined,
       trailing: TextButton(onPressed: () => ref.read(pageProvider.notifier).go(ConsolePage.billing), child: const Text('Breakdown')),
-      child: AsyncView(
+      child: VaAsyncView(
         value: ref.watch(billingProvider),
         data: (b) {
           if (b == null) {
-            return const EmptyNote(
+            return const VaEmptyNote(
               'No report yet. The monthly budget publishes its month-to-date cost a few '
               'times a day; the first figure appears here after its next report.',
               icon: Icons.hourglass_empty,
@@ -727,7 +719,7 @@ class SpendPanel extends ConsumerWidget {
                 children: [
                   Text(
                     money(b.costAmount, b.currencyCode),
-                    style: text.headlineSmall?.copyWith(fontWeight: FontWeight.w600, fontFamily: Tokens.of(context).mono),
+                    style: text.headlineSmall?.copyWith(fontWeight: FontWeight.w600, fontFamily: VaType.mono),
                   ),
                   const SizedBox(width: 10),
                   Padding(
@@ -767,15 +759,15 @@ class ProjectsSummaryPanel extends ConsumerWidget {
       for (final r in requests)
         if (r.status == 'queued' || r.status == 'running') r.devstationId: r,
     };
-    return Panel(
+    return VaPanel(
       title: 'Projects',
       subtitle: 'Devstations and their directors',
       icon: Icons.folder_outlined,
       trailing: TextButton(onPressed: () => ref.read(pageProvider.notifier).go(ConsolePage.projects), child: const Text('Open')),
-      child: AsyncView(
+      child: VaAsyncView(
         value: ref.watch(devstationsProvider),
         data: (list) => list.isEmpty
-            ? const EmptyNote('No Devstations. Create one on the Projects page.', icon: Icons.precision_manufacturing_outlined)
+            ? const VaEmptyNote('No Devstations. Create one on the Projects page.', icon: Icons.precision_manufacturing_outlined)
             : Column(
                 children: [
                   for (final d in list)

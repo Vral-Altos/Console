@@ -2,8 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:ui_mesh/ui_mesh.dart';
 
-import '../theme.dart';
 import 'code_editing.dart';
 
 /// A plain code editor: line numbers, syntax colouring, no soft wrap,
@@ -141,16 +141,15 @@ class _CodeEditorState extends State<CodeEditor> {
 
   @override
   Widget build(BuildContext context) {
-    final t = Tokens.of(context);
     final style = TextStyle(
-      fontFamily: t.mono,
+      fontFamily: VaType.mono,
       fontFamilyFallback: const ['Menlo', 'Consolas', 'monospace'],
       fontSize: CodeEditor.fontSize,
       height: CodeEditor.lineHeight,
       color: Theme.of(context).colorScheme.onSurface,
     );
     final strut = StrutStyle(
-      fontFamily: t.mono,
+      fontFamily: VaType.mono,
       fontSize: CodeEditor.fontSize,
       height: CodeEditor.lineHeight,
       forceStrutHeight: true,
@@ -183,7 +182,7 @@ class _CodeEditorState extends State<CodeEditor> {
                         _gutter,
                         textAlign: TextAlign.right,
                         strutStyle: strut,
-                        style: style.copyWith(color: t.faint),
+                        style: style.copyWith(color: VaColors.faint),
                       ),
                     ),
                     Expanded(
@@ -231,7 +230,7 @@ class _CodeEditorState extends State<CodeEditor> {
             child: Material(
               key: const ValueKey('completions'),
               elevation: 3,
-              color: t.panel,
+              color: VaColors.panel,
               borderRadius: BorderRadius.circular(8),
               child: SizedBox(
                 height: 34,
@@ -259,7 +258,7 @@ class _CodeEditorState extends State<CodeEditor> {
                     Center(
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 8),
-                        child: Text('Tab', style: TextStyle(fontSize: 11, color: t.faint)),
+                        child: Text('Tab', style: TextStyle(fontSize: 12, color: VaColors.faint)),
                       ),
                     ),
                   ],

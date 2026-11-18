@@ -7,7 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/attachments.dart';
 import '../../data/models.dart';
 import '../../data/providers.dart';
-import '../theme.dart';
 import '../widgets.dart';
 import 'attachment_views.dart';
 import 'file_io.dart';
@@ -357,7 +356,6 @@ class ComposerState extends ConsumerState<Composer> {
 
   @override
   Widget build(BuildContext context) {
-    final t = Tokens.of(context);
     final scheme = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
     final empty = _c.text.trim().isEmpty && _uploads.isEmpty;
@@ -392,14 +390,14 @@ class ComposerState extends ConsumerState<Composer> {
                 duration: const Duration(milliseconds: 180),
                 curve: Curves.easeOutCubic,
                 decoration: BoxDecoration(
-                  color: _dragging ? scheme.primary.withValues(alpha: .05) : t.panel,
+                  color: _dragging ? scheme.primary.withValues(alpha: .05) : VaColors.panel,
                   borderRadius: BorderRadius.circular(18),
                   border: Border.all(
                     color: _dragging
-                        ? scheme.primary
+                        ? VaColors.accentText
                         : _focus.hasFocus
-                        ? t.faint.withValues(alpha: .7)
-                        : t.border,
+                        ? VaColors.faint.withValues(alpha: .7)
+                        : VaColors.border,
                     width: _dragging ? 1.6 : 1,
                   ),
                   boxShadow: [
@@ -411,9 +409,9 @@ class ComposerState extends ConsumerState<Composer> {
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                       child: Row(children: [
-                        Icon(Icons.file_download_outlined, size: 18, color: scheme.primary),
+                        Icon(Icons.file_download_outlined, size: 18, color: VaColors.accentText),
                         const SizedBox(width: 8),
-                        Text('Drop to attach', style: text.labelLarge?.copyWith(color: scheme.primary)),
+                        Text('Drop to attach', style: text.labelLarge?.copyWith(color: VaColors.accentText)),
                       ]),
                     ),
                   if (_uploads.isNotEmpty)
@@ -471,12 +469,12 @@ class ComposerState extends ConsumerState<Composer> {
                       IconButton(
                         tooltip: canAttach ? 'Attach files' : 'Attachments are not configured',
                         onPressed: canAttach && _uploads.length < AttachmentLimits.maxFiles ? _pick : null,
-                        icon: Icon(Icons.attach_file, size: 20, color: t.muted),
+                        icon: Icon(Icons.attach_file, size: 20, color: VaColors.muted),
                       ),
                       IconButton(
                         tooltip: 'Mention a conversation, project or agent',
                         onPressed: _startMention,
-                        icon: Icon(Icons.alternate_email, size: 20, color: t.muted),
+                        icon: Icon(Icons.alternate_email, size: 20, color: VaColors.muted),
                       ),
                       if (widget.leading != null) ...[
                         const SizedBox(width: 4),
@@ -486,7 +484,7 @@ class ComposerState extends ConsumerState<Composer> {
                       if (long)
                         Padding(
                           padding: const EdgeInsets.only(right: 8),
-                          child: Text('${_c.text.length} / ${Composer.maxLength}', style: text.labelSmall?.copyWith(color: t.warn)),
+                          child: Text('${_c.text.length} / ${Composer.maxLength}', style: text.labelSmall?.copyWith(color: VaColors.warning)),
                         ),
                       AnimatedSwitcher(
                         duration: const Duration(milliseconds: 180),
@@ -496,9 +494,9 @@ class ComposerState extends ConsumerState<Composer> {
                                 key: const ValueKey('stop'),
                                 tooltip: widget.stopping ? 'Stopping…' : 'Stop',
                                 onPressed: widget.stopping ? null : widget.onStop,
-                                style: IconButton.styleFrom(backgroundColor: scheme.onSurface, foregroundColor: t.panel),
+                                style: IconButton.styleFrom(backgroundColor: scheme.onSurface, foregroundColor: VaColors.panel),
                                 icon: widget.stopping
-                                    ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: t.panel))
+                                    ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: VaColors.panel))
                                     : const Icon(Icons.stop_rounded, size: 20),
                               )
                             : IconButton.filled(
@@ -517,12 +515,12 @@ class ComposerState extends ConsumerState<Composer> {
               if (_error != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 6, left: 6),
-                  child: Text(_error!, style: text.labelSmall?.copyWith(color: t.bad)),
+                  child: Text(_error!, style: text.labelSmall?.copyWith(color: VaColors.danger)),
                 )
               else if (widget.footnote != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 6),
-                  child: Text(widget.footnote!, textAlign: TextAlign.center, style: text.labelSmall?.copyWith(color: t.faint)),
+                  child: Text(widget.footnote!, textAlign: TextAlign.center, style: text.labelSmall?.copyWith(color: VaColors.faint)),
                 ),
             ]),
           ),
@@ -547,7 +545,6 @@ class _MentionMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Tokens.of(context);
     final scheme = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
     final rows = <Widget>[];
@@ -557,7 +554,7 @@ class _MentionMenu extends StatelessWidget {
         last = o.mention.kind;
         rows.add(Padding(
           padding: const EdgeInsets.fromLTRB(14, 8, 14, 2),
-          child: Text(_heading(last), style: text.labelSmall?.copyWith(color: t.faint, fontWeight: FontWeight.w600)),
+          child: Text(_heading(last), style: text.labelSmall?.copyWith(color: VaColors.faint, fontWeight: FontWeight.w600)),
         ));
       }
       rows.add(MouseRegion(
@@ -576,12 +573,12 @@ class _MentionMenu extends StatelessWidget {
                 if (o.mention.kind == MentionKind.agent)
                   AgentAvatar(agent: o.mention.id, size: 22)
                 else
-                  Icon(mentionIcon(o.mention.kind), size: 18, color: t.muted),
+                  Icon(mentionIcon(o.mention.kind), size: 18, color: VaColors.muted),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text(o.mention.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: text.bodyMedium?.copyWith(fontWeight: FontWeight.w500)),
-                    Text(o.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: text.labelSmall?.copyWith(color: t.faint)),
+                    Text(o.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: text.labelSmall?.copyWith(color: VaColors.faint)),
                   ]),
                 ),
               ]),
@@ -593,10 +590,10 @@ class _MentionMenu extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Material(
-        color: t.panel,
+        color: VaColors.panel,
         elevation: 6,
         shadowColor: Colors.black26,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: t.border)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: VaColors.border)),
         clipBehavior: Clip.antiAlias,
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxHeight: 300),

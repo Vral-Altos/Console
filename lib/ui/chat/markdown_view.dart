@@ -6,8 +6,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:markdown/markdown.dart' as md;
 import 'package:url_launcher/url_launcher.dart';
+import 'package:ui_mesh/ui_mesh.dart';
 
-import '../theme.dart';
 import 'code_highlight.dart';
 
 /// An agent's reply as rendered Markdown (GitHub flavour: tables, task
@@ -21,7 +21,6 @@ class MarkdownView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final t = Tokens.of(context);
     final body = theme.textTheme.bodyLarge!;
     final sheet = MarkdownStyleSheet.fromTheme(theme).copyWith(
       p: body,
@@ -37,23 +36,23 @@ class MarkdownView extends StatelessWidget {
       listBullet: body,
       listIndent: 22,
       strong: const TextStyle(fontWeight: FontWeight.w600),
-      a: TextStyle(color: theme.colorScheme.primary, decoration: TextDecoration.underline, decorationColor: theme.colorScheme.primary.withValues(alpha: .4)),
+      a: TextStyle(color: VaColors.accentText, decoration: TextDecoration.underline, decorationColor: VaColors.accentText.withValues(alpha: .45)),
       code: TextStyle(
-        fontFamily: t.mono,
+        fontFamily: VaType.mono,
         fontSize: body.fontSize! * .86,
-        backgroundColor: t.sunken,
+        backgroundColor: VaColors.sunken,
         color: theme.colorScheme.onSurface,
       ),
-      blockquote: body.copyWith(color: t.muted),
-      blockquoteDecoration: BoxDecoration(border: Border(left: BorderSide(color: t.border, width: 3))),
+      blockquote: body.copyWith(color: VaColors.muted),
+      blockquoteDecoration: BoxDecoration(border: Border(left: BorderSide(color: VaColors.border, width: 3))),
       blockquotePadding: const EdgeInsets.fromLTRB(14, 2, 0, 2),
       tableHead: body.copyWith(fontWeight: FontWeight.w600, fontSize: 14),
       tableBody: body.copyWith(fontSize: 14),
-      tableBorder: TableBorder.all(color: t.border, width: 1),
+      tableBorder: TableBorder.all(color: VaColors.border, width: 1),
       tableCellsPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       tableColumnWidth: const IntrinsicColumnWidth(),
-      horizontalRuleDecoration: BoxDecoration(border: Border(top: BorderSide(color: t.border))),
-      checkbox: body.copyWith(color: theme.colorScheme.primary),
+      horizontalRuleDecoration: BoxDecoration(border: Border(top: BorderSide(color: VaColors.border))),
+      checkbox: body.copyWith(color: VaColors.accentText),
       // Code blocks draw their own card (CodeBlock).
       codeblockDecoration: const BoxDecoration(),
       codeblockPadding: EdgeInsets.zero,
@@ -127,28 +126,27 @@ class _CodeBlockState extends State<CodeBlock> {
 
   @override
   Widget build(BuildContext context) {
-    final t = Tokens.of(context);
     final text = Theme.of(context).textTheme;
-    final base = TextStyle(fontFamily: t.mono, fontSize: 13, height: 1.55, color: Theme.of(context).colorScheme.onSurface);
+    final base = TextStyle(fontFamily: VaType.mono, fontSize: 13, height: 1.55, color: Theme.of(context).colorScheme.onSurface);
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 4),
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: t.sunken,
+        color: VaColors.sunken,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: t.border.withValues(alpha: .7)),
+        border: Border.all(color: VaColors.border.withValues(alpha: .7)),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(14, 2, 4, 0),
           child: Row(children: [
-            Text(widget.language ?? 'text', style: text.labelSmall?.copyWith(fontFamily: t.mono, color: t.faint)),
+            Text(widget.language ?? 'text', style: text.labelSmall?.copyWith(fontFamily: VaType.mono, color: VaColors.faint)),
             const Spacer(),
             TextButton.icon(
               onPressed: _copy,
               style: TextButton.styleFrom(
                 visualDensity: VisualDensity.compact,
-                foregroundColor: t.muted,
+                foregroundColor: VaColors.muted,
                 textStyle: text.labelSmall,
               ),
               icon: AnimatedSwitcher(

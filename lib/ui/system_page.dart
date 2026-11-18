@@ -5,7 +5,6 @@ import '../data/models.dart';
 import '../data/providers.dart';
 import 'hosts.dart';
 import 'projects_page.dart';
-import 'theme.dart';
 import 'widgets.dart';
 
 /// The running system in detail: approvals, hosts, agent sessions, usage by
@@ -45,17 +44,16 @@ class ApprovalsPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final t = Tokens.of(context);
     final text = Theme.of(context).textTheme;
     final repo = ref.read(repositoryProvider);
-    return Panel(
+    return VaPanel(
       title: 'Approvals',
       subtitle: 'Agents ask here before spending, deploying or anything irreversible.',
       icon: Icons.gavel,
-      child: AsyncView(
+      child: VaAsyncView(
         value: ref.watch(approvalsProvider),
         data: (list) => list.isEmpty
-            ? const EmptyNote('No requests.')
+            ? const VaEmptyNote('No requests.')
             : Column(children: [
                 for (final a in list)
                   Padding(
@@ -68,7 +66,7 @@ class ApprovalsPanel extends ConsumerWidget {
                           _ => Icons.help,
                         },
                         size: 18,
-                        color: switch (a.status) { 'approved' => t.ok, 'rejected' => t.bad, _ => t.warn },
+                        color: switch (a.status) { 'approved' => VaColors.success, 'rejected' => VaColors.danger, _ => VaColors.warning },
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -101,13 +99,13 @@ class HostDetailsPanel extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final text = Theme.of(context).textTheme;
-    return Panel(
+    return VaPanel(
       title: 'Hosts',
       subtitle: 'The Mac serves while its heartbeat is under 2 minutes old; otherwise the cloud runner takes the work.',
       icon: Icons.dns_outlined,
-      child: AsyncView(
+      child: VaAsyncView(
         value: ref.watch(allStatusProvider),
-        data: (all) => ResponsiveGrid(minWidth: 320, maxColumns: 3, children: [
+        data: (all) => VaResponsiveGrid(minWidth: 320, maxColumns: 3, children: [
           for (final e in orderedHosts(all))
             Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               HostCard(id: e.key, status: e.value),
@@ -115,11 +113,11 @@ class HostDetailsPanel extends ConsumerWidget {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(4, 10, 4, 0),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                    KeyValue('Last heartbeat', e.value!.lastSeen == null ? '—' : ago(e.value!.lastSeen)),
-                    if (e.value!.startedAt != null) KeyValue('Started', ago(e.value!.startedAt)),
-                    if (e.value!.agents.isNotEmpty) KeyValue('Agents', e.value!.agents.join(', ')),
-                    if (e.value!.claudeVersion != null) KeyValue('Claude Code', e.value!.claudeVersion!),
-                    if (e.value!.revision != null) KeyValue('Revision', e.value!.revision!, mono: true),
+                    VaKeyValue('Last heartbeat', e.value!.lastSeen == null ? '—' : ago(e.value!.lastSeen)),
+                    if (e.value!.startedAt != null) VaKeyValue('Started', ago(e.value!.startedAt)),
+                    if (e.value!.agents.isNotEmpty) VaKeyValue('Agents', e.value!.agents.join(', ')),
+                    if (e.value!.claudeVersion != null) VaKeyValue('Claude Code', e.value!.claudeVersion!),
+                    if (e.value!.revision != null) VaKeyValue('Revision', e.value!.revision!, mono: true),
                   ]),
                 ),
               Text('', style: text.labelSmall),
@@ -143,11 +141,10 @@ class _SessionsPanelState extends ConsumerState<SessionsPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final t = Tokens.of(context);
     final text = Theme.of(context).textTheme;
     final narrow = MediaQuery.sizeOf(context).width < 760;
     final threads = {for (final th in ref.watch(threadsProvider).value ?? const <ChatThread>[]) th.id: th};
-    return Panel(
+    return VaPanel(
       title: 'Agent sessions',
       subtitle: 'Claude Code sessions: context, turns and API-equivalent cost',
       icon: Icons.memory,
@@ -161,12 +158,12 @@ class _SessionsPanelState extends ConsumerState<SessionsPanel> {
         selected: {_filter},
         onSelectionChanged: (s) => setState(() => _filter = s.first),
       ),
-      child: AsyncView(
+      child: VaAsyncView(
         value: ref.watch(meshProvider),
         data: (mesh) {
           final list = [...?mesh?.sessions.where((s) => _filter == 'all' || s.status == 'active')]
             ..sort((a, b) => (b.lastUsedAt ?? DateTime(0)).compareTo(a.lastUsedAt ?? DateTime(0)));
-          if (list.isEmpty) return EmptyNote(_filter == 'active' ? 'No active sessions.' : 'No sessions yet.');
+          if (list.isEmpty) return VaEmptyNote(_filter == 'active' ? 'No active sessions.' : 'No sessions yet.');
           final total = list.fold<double>(0, (a, s) => a + s.costUsd);
           final rows = [
             for (final s in list.take(60))
@@ -174,9 +171,9 @@ class _SessionsPanelState extends ConsumerState<SessionsPanel> {
                 final threadId = s.taskId.startsWith('console-') ? s.taskId.substring(8) : null;
                 final title = threadId != null && threads[threadId] != null ? threads[threadId]!.title : s.taskId;
                 final status = switch (s.status) {
-                  'active' => StatusPill(label: 'active', color: t.ok, dense: true),
-                  'handedOff' => StatusPill(label: 'handed off', color: t.info, dense: true),
-                  _ => StatusPill(label: s.status, color: t.faint, dense: true),
+                  'active' => VaStatusPill(label: 'active', color: VaColors.success, dense: true),
+                  'handedOff' => VaStatusPill(label: 'handed off', color: VaColors.info, dense: true),
+                  _ => VaStatusPill(label: s.status, color: VaColors.faint, dense: true),
                 };
                 final open = threadId != null && threads.containsKey(threadId) ? () => openChat(ref, threadId: threadId) : null;
                 if (narrow) {
@@ -219,7 +216,7 @@ class _SessionsPanelState extends ConsumerState<SessionsPanel> {
                       ),
                       Expanded(flex: 1, child: Text('${s.turns}', style: text.bodySmall)),
                       Expanded(flex: 2, child: Text('${compact(s.contextTokens)}${s.compactions > 0 ? ' (${s.compactions}×)' : ''}', style: text.bodySmall)),
-                      Expanded(flex: 1, child: Text(usd(s.costUsd), style: text.bodySmall?.copyWith(fontFamily: t.mono))),
+                      Expanded(flex: 1, child: Text(usd(s.costUsd), style: text.bodySmall?.copyWith(fontFamily: VaType.mono))),
                       Expanded(flex: 1, child: Text(s.accountId, style: text.bodySmall)),
                       Expanded(flex: 2, child: Text(ago(s.lastUsedAt), style: text.bodySmall)),
                       SizedBox(width: 96, child: Align(alignment: Alignment.centerRight, child: status)),
@@ -245,7 +242,7 @@ class _SessionsPanelState extends ConsumerState<SessionsPanel> {
                   ]),
                 ),
               ),
-            if (!narrow) Divider(color: t.border),
+            if (!narrow) Divider(color: VaColors.border),
             for (final r in rows) r,
             const SizedBox(height: 8),
             Text('${list.length} session${list.length == 1 ? '' : 's'} · ${usd(total)} API-equivalent'
@@ -263,16 +260,15 @@ class UsageSplitPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final t = Tokens.of(context);
     final text = Theme.of(context).textTheme;
-    return Panel(
+    return VaPanel(
       title: 'Where chats ran',
       subtitle: 'All-time chat turns by host and by Claude account',
       icon: Icons.pie_chart_outline,
-      child: AsyncView(
+      child: VaAsyncView(
         value: ref.watch(usageStatsProvider),
         data: (stats) {
-          if (stats == null || stats.turns + stats.failed == 0) return const EmptyNote('No chat turns counted yet.');
+          if (stats == null || stats.turns + stats.failed == 0) return const VaEmptyNote('No chat turns counted yet.');
           Widget split(String title, Map<String, UsageSlice> m) {
             final total = m.values.fold<int>(0, (a, s) => a + s.turns);
             return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -283,12 +279,12 @@ class UsageSplitPanel extends ConsumerWidget {
                   padding: const EdgeInsets.symmetric(vertical: 4),
                   child: Row(children: [
                     SizedBox(width: 90, child: Text(e.key, style: text.bodySmall)),
-                    Expanded(child: Meter(value: total == 0 ? 0 : e.value.turns / total)),
+                    Expanded(child: VaMeter(value: total == 0 ? 0 : e.value.turns / total)),
                     const SizedBox(width: 10),
                     SizedBox(
                       width: 120,
                       child: Text('${e.value.turns} · ${usd(e.value.costUsd)}${e.value.failed > 0 ? ' · ${e.value.failed}✕' : ''}',
-                          textAlign: TextAlign.right, style: text.labelSmall?.copyWith(fontFamily: t.mono)),
+                          textAlign: TextAlign.right, style: text.labelSmall?.copyWith(fontFamily: VaType.mono)),
                     ),
                   ]),
                 ),
@@ -324,7 +320,7 @@ class _Figure extends StatelessWidget {
     final text = Theme.of(context).textTheme;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text(label, style: text.labelSmall),
-      Text(value, style: text.titleMedium?.copyWith(fontFamily: Tokens.of(context).mono)),
+      Text(value, style: text.titleMedium?.copyWith(fontFamily: VaType.mono)),
     ]);
   }
 }
@@ -335,16 +331,15 @@ class SyncsPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final t = Tokens.of(context);
     final text = Theme.of(context).textTheme;
-    return Panel(
+    return VaPanel(
       title: 'Tool syncs',
       subtitle: 'What tools copy into the platform database for the agents',
       icon: Icons.sync,
-      child: AsyncView(
+      child: VaAsyncView(
         value: ref.watch(portfolioSyncProvider),
         data: (p) => Row(children: [
-          Icon(Icons.candlestick_chart_outlined, size: 20, color: t.muted),
+          Icon(Icons.candlestick_chart_outlined, size: 20, color: VaColors.muted),
           const SizedBox(width: 12),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -356,9 +351,9 @@ class SyncsPanel extends ConsumerWidget {
             ]),
           ),
           if (p?.syncedAt != null)
-            StatusPill(
+            VaStatusPill(
               label: DateTime.now().difference(p!.syncedAt!) < const Duration(hours: 26) ? 'Fresh' : 'Stale',
-              color: DateTime.now().difference(p.syncedAt!) < const Duration(hours: 26) ? t.ok : t.warn,
+              color: DateTime.now().difference(p.syncedAt!) < const Duration(hours: 26) ? VaColors.success : VaColors.warning,
               dense: true,
             ),
         ]),
@@ -367,33 +362,18 @@ class SyncsPanel extends ConsumerWidget {
   }
 }
 
-/// Appearance and the signed-in account.
+/// The signed-in account.
 class SettingsPanel extends ConsumerWidget {
   const SettingsPanel({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final text = Theme.of(context).textTheme;
-    final mode = ref.watch(themeModeProvider);
     final user = ref.watch(authStateProvider).value;
-    return Panel(
+    return VaPanel(
       title: 'Console',
       icon: Icons.settings_outlined,
       child: Wrap(spacing: 24, runSpacing: 16, crossAxisAlignment: WrapCrossAlignment.center, children: [
-        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Appearance', style: text.labelMedium),
-          const SizedBox(height: 6),
-          SegmentedButton<ThemeMode>(
-            showSelectedIcon: false,
-            segments: const [
-              ButtonSegment(value: ThemeMode.system, icon: Icon(Icons.brightness_auto_outlined, size: 18), label: Text('System')),
-              ButtonSegment(value: ThemeMode.light, icon: Icon(Icons.light_mode_outlined, size: 18), label: Text('Light')),
-              ButtonSegment(value: ThemeMode.dark, icon: Icon(Icons.dark_mode_outlined, size: 18), label: Text('Dark')),
-            ],
-            selected: {mode},
-            onSelectionChanged: (s) => ref.read(themeModeProvider.notifier).set(s.first),
-          ),
-        ]),
         if (user != null)
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('Signed in as', style: text.labelMedium),

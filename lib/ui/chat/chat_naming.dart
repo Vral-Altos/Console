@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/models.dart';
 import '../../data/providers.dart';
-import '../theme.dart';
 import '../widgets.dart';
 
 /// How a conversation is named everywhere in the Console:
@@ -86,17 +85,16 @@ class UsageChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Tokens.of(context);
     final text = Theme.of(context).textTheme;
     return Tooltip(
       message: tooltip,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(color: t.sunken, borderRadius: BorderRadius.circular(8)),
+        decoration: BoxDecoration(color: VaColors.sunken, borderRadius: BorderRadius.circular(8)),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, size: 13, color: color ?? t.muted),
+          Icon(icon, size: 13, color: color ?? VaColors.muted),
           const SizedBox(width: 5),
-          Text(label, style: text.labelSmall?.copyWith(color: color ?? t.muted, fontFeatures: const [FontFeature.tabularFigures()])),
+          Text(label, style: text.labelSmall?.copyWith(color: color ?? VaColors.muted, fontFeatures: const [FontFeature.tabularFigures()])),
         ]),
       ),
     );
@@ -112,10 +110,9 @@ class QuotaChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Tokens.of(context);
     final text = Theme.of(context).textTheme;
     final u = usage.utilization;
-    final color = u >= .9 ? t.bad : u >= .75 ? t.warn : t.muted;
+    final color = u >= .9 ? VaColors.danger : u >= .75 ? VaColors.warning : VaColors.muted;
     final reset = resetsIn(usage);
     return Tooltip(
       message: [
@@ -125,11 +122,11 @@ class QuotaChip extends StatelessWidget {
       ].join(' · '),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(color: t.sunken, borderRadius: BorderRadius.circular(8)),
+        decoration: BoxDecoration(color: VaColors.sunken, borderRadius: BorderRadius.circular(8)),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Text(window, style: text.labelSmall?.copyWith(color: t.faint)),
+          Text(window, style: text.labelSmall?.copyWith(color: VaColors.faint)),
           const SizedBox(width: 6),
-          SizedBox(width: 28, child: Meter(value: u, height: 4)),
+          SizedBox(width: 28, child: VaMeter(value: u, height: 4)),
           const SizedBox(width: 6),
           Text(pct(u), style: text.labelSmall?.copyWith(color: color, fontFeatures: const [FontFeature.tabularFigures()])),
         ]),
@@ -160,7 +157,6 @@ class ModelEffortMenu extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final t = Tokens.of(context);
     final text = Theme.of(context).textTheme;
     final own = ref.watch(agentDefaultsProvider)[thread.agent];
     final model = thread.model ?? own?.model;
@@ -177,7 +173,7 @@ class ModelEffortMenu extends ConsumerWidget {
     PopupMenuItem<String> heading(String s) => PopupMenuItem<String>(
       enabled: false,
       height: 28,
-      child: Text(s, style: text.labelSmall?.copyWith(color: t.faint, letterSpacing: .6)),
+      child: Text(s, style: text.labelSmall?.copyWith(color: VaColors.faint, letterSpacing: .6)),
     );
 
     return PopupMenuButton<String>(
@@ -210,21 +206,21 @@ class ModelEffortMenu extends ConsumerWidget {
       child: compact
           ? Padding(
               padding: const EdgeInsets.all(6),
-              child: Icon(Icons.tune, size: 18, color: chosen ? t.info : t.muted),
+              child: Icon(Icons.tune, size: 18, color: chosen ? VaColors.info : VaColors.muted),
             )
           : Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: t.sunken,
+                color: VaColors.sunken,
                 borderRadius: BorderRadius.circular(8),
-                border: chosen ? Border.all(color: t.info.withValues(alpha: .5)) : null,
+                border: chosen ? Border.all(color: VaColors.info.withValues(alpha: .5)) : null,
               ),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(Icons.memory, size: 13, color: chosen ? t.info : t.muted),
+                Icon(Icons.memory, size: 13, color: chosen ? VaColors.info : VaColors.muted),
                 const SizedBox(width: 5),
                 Text(label.isEmpty ? 'Default' : label,
-                    style: text.labelSmall?.copyWith(color: chosen ? t.info : t.muted)),
-                Icon(Icons.arrow_drop_down, size: 16, color: t.faint),
+                    style: text.labelSmall?.copyWith(color: chosen ? VaColors.info : VaColors.muted)),
+                Icon(Icons.arrow_drop_down, size: 16, color: VaColors.faint),
               ]),
             ),
     );

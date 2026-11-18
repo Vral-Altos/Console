@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/models.dart';
 import '../../data/providers.dart';
-import '../theme.dart';
 import '../widgets.dart';
 import 'chat_naming.dart';
 
@@ -40,14 +39,13 @@ class _ThreadSidebarState extends ConsumerState<ThreadSidebar> {
 
   @override
   Widget build(BuildContext context) {
-    final t = Tokens.of(context);
     final selected = ref.watch(selectedThreadProvider);
     final busy = {
       for (final m in ref.watch(activeMessagesProvider).value ?? const <ChatMessage>[]) m.threadId,
     };
     final threadsValue = ref.watch(threadsProvider);
     return ColoredBox(
-      color: t.canvas,
+      color: VaColors.canvas,
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 12, 8, 4),
@@ -66,13 +64,13 @@ class _ThreadSidebarState extends ConsumerState<ThreadSidebar> {
               key: const Key('manage-projects'),
               tooltip: 'Projects',
               onPressed: () => showDialog<void>(context: context, builder: (_) => const ProjectsDialog()),
-              icon: Icon(Icons.folder_copy_outlined, color: t.muted),
+              icon: Icon(Icons.folder_copy_outlined, color: VaColors.muted),
             ),
             if (widget.onCollapse != null)
               IconButton(
                 tooltip: 'Hide conversations',
                 onPressed: widget.onCollapse,
-                icon: Icon(Icons.view_sidebar_outlined, color: t.muted),
+                icon: Icon(Icons.view_sidebar_outlined, color: VaColors.muted),
               ),
           ]),
         ),
@@ -83,7 +81,7 @@ class _ThreadSidebarState extends ConsumerState<ThreadSidebar> {
             onChanged: (v) => setState(() => _query = v.trim().toLowerCase()),
             decoration: InputDecoration(
               hintText: 'Search conversations',
-              prefixIcon: Icon(Icons.search, size: 18, color: t.muted),
+              prefixIcon: Icon(Icons.search, size: 18, color: VaColors.muted),
               suffixIcon: _query.isEmpty
                   ? null
                   : IconButton(
@@ -94,7 +92,7 @@ class _ThreadSidebarState extends ConsumerState<ThreadSidebar> {
                         _query = '';
                       }),
                     ),
-              fillColor: t.sunken,
+              fillColor: VaColors.sunken,
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
               enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
               contentPadding: const EdgeInsets.symmetric(vertical: 10),
@@ -109,7 +107,7 @@ class _ThreadSidebarState extends ConsumerState<ThreadSidebar> {
           ),
         ),
         Expanded(
-          child: AsyncView(
+          child: VaAsyncView(
             value: threadsValue,
             data: (all) {
               final archivedCount = all.where((th) => th.archived).length;
@@ -128,7 +126,7 @@ class _ThreadSidebarState extends ConsumerState<ThreadSidebar> {
                   child: shown.isEmpty
                       ? Padding(
                           padding: const EdgeInsets.all(16),
-                          child: EmptyNote(
+                          child: VaEmptyNote(
                             _query.isNotEmpty
                                 ? 'No conversation matches "$_query".'
                                 : _archived
@@ -175,7 +173,7 @@ class _ThreadSidebarState extends ConsumerState<ThreadSidebar> {
                       onPressed: () => setState(() => _archived = !_archived),
                       icon: Icon(_archived ? Icons.arrow_back : Icons.archive_outlined, size: 18),
                       label: Text(_archived ? 'Back to conversations' : 'Archived ($archivedCount)'),
-                      style: TextButton.styleFrom(foregroundColor: t.muted, alignment: Alignment.centerLeft),
+                      style: TextButton.styleFrom(foregroundColor: VaColors.muted, alignment: Alignment.centerLeft),
                     ),
                   ),
               ]);
@@ -203,7 +201,6 @@ class _ThreadTileState extends ConsumerState<ThreadTile> {
 
   @override
   Widget build(BuildContext context) {
-    final t = Tokens.of(context);
     final text = Theme.of(context).textTheme;
     final th = widget.thread;
     final touch = Theme.of(context).platform == TargetPlatform.iOS || Theme.of(context).platform == TargetPlatform.android;
@@ -216,7 +213,7 @@ class _ThreadTileState extends ConsumerState<ThreadTile> {
           duration: const Duration(milliseconds: 140),
           curve: Curves.easeOut,
           decoration: BoxDecoration(
-            color: widget.selected ? t.sunken : (_hover ? t.sunken.withValues(alpha: .6) : t.sunken.withValues(alpha: 0)),
+            color: widget.selected ? VaColors.sunken : (_hover ? VaColors.sunken.withValues(alpha: .6) : VaColors.sunken.withValues(alpha: 0)),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Material(
@@ -259,12 +256,12 @@ class _ThreadTileState extends ConsumerState<ThreadTile> {
                 if (widget.busy)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 6),
-                    child: Tooltip(message: 'Answering', child: StatusDot(color: t.info, pulse: true)),
+                    child: Tooltip(message: 'Answering', child: VaStatusDot(color: VaColors.info, pulse: true)),
                   ),
                 if (th.pinned && !_hover && !widget.selected)
                   Padding(
                     padding: const EdgeInsets.only(right: 8),
-                    child: Icon(Icons.push_pin, size: 14, color: t.faint),
+                    child: Icon(Icons.push_pin, size: 14, color: VaColors.faint),
                   ),
                 AnimatedOpacity(
                   duration: const Duration(milliseconds: 120),
@@ -295,7 +292,7 @@ class ThreadMenu extends ConsumerWidget {
       tooltip: 'Conversation options',
       iconSize: small ? 18 : 22,
       padding: EdgeInsets.zero,
-      icon: Icon(Icons.more_horiz, color: Tokens.of(context).muted),
+      icon: Icon(Icons.more_horiz, color: VaColors.muted),
       onSelected: (v) async {
         if (repo == null) return;
         switch (v) {
@@ -508,7 +505,6 @@ class _GroupHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Tokens.of(context);
     final text = Theme.of(context).textTheme;
     final cost = threads.fold<double>(0, (a, th) => a + th.costUsd);
     return InkWell(
@@ -521,7 +517,7 @@ class _GroupHeader extends StatelessWidget {
             AnimatedRotation(
               turns: folded ? -.25 : 0,
               duration: const Duration(milliseconds: 140),
-              child: Icon(Icons.expand_more, size: 16, color: t.faint),
+              child: Icon(Icons.expand_more, size: 16, color: VaColors.faint),
             ),
             const SizedBox(width: 4),
           ],
@@ -530,7 +526,7 @@ class _GroupHeader extends StatelessWidget {
           ),
           Text(
             '${threads.length} · ${usd(cost)}',
-            style: text.labelSmall?.copyWith(color: t.faint, fontFeatures: const [FontFeature.tabularFigures()]),
+            style: text.labelSmall?.copyWith(color: VaColors.faint, fontFeatures: const [FontFeature.tabularFigures()]),
           ),
         ]),
       ),
@@ -665,7 +661,6 @@ class _ProjectsDialogState extends ConsumerState<ProjectsDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final t = Tokens.of(context);
     final repo = ref.read(repositoryProvider);
     final projects = ref.watch(chatProjectsProvider).value ?? const <ChatProject>[];
     final threads = ref.watch(threadsProvider).value ?? const <ChatThread>[];
@@ -691,7 +686,7 @@ class _ProjectsDialogState extends ConsumerState<ProjectsDialog> {
             'New conversations are filed under one of these by a small model after the first reply, '
             'unless you pick one when you start. Renaming a project refiles its conversations; '
             'deleting one moves them to General.',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: t.muted),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: VaColors.muted),
           ),
           const SizedBox(height: 8),
           for (final p in projects)
@@ -736,7 +731,7 @@ class _ProjectsDialogState extends ConsumerState<ProjectsDialog> {
           ListTile(
             dense: true,
             contentPadding: EdgeInsets.zero,
-            leading: Icon(Icons.inbox_outlined, color: t.muted),
+            leading: Icon(Icons.inbox_outlined, color: VaColors.muted),
             title: const Text('General'),
             subtitle: Text(count(null)),
           ),

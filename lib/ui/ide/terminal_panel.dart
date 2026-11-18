@@ -2,9 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:xterm/xterm.dart';
+import 'package:ui_mesh/ui_mesh.dart';
 
 import '../../data/ide_connection.dart';
-import '../theme.dart';
 
 /// One shell on the Devstation and its screen here.
 class TermTab {
@@ -136,7 +136,6 @@ class TerminalPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Tokens.of(context);
     return ListenableBuilder(
       listenable: terminals,
       builder: (context, _) {
@@ -147,8 +146,8 @@ class TerminalPanel extends StatelessWidget {
             Container(
               height: 34,
               decoration: BoxDecoration(
-                color: t.panel,
-                border: Border(bottom: BorderSide(color: t.border)),
+                color: VaColors.panel,
+                border: Border(bottom: BorderSide(color: VaColors.border)),
               ),
               child: Row(
                 children: [
@@ -202,7 +201,7 @@ class TerminalPanel extends StatelessWidget {
                         key: ValueKey('term-${current.id}'),
                         autofocus: true,
                         padding: const EdgeInsets.all(6),
-                        textStyle: TerminalStyle(fontSize: 13, fontFamily: t.mono ?? 'monospace'),
+                        textStyle: TerminalStyle(fontSize: 13, fontFamily: VaType.mono),
                         keyboardType: TextInputType.text,
                       ),
                     ),
@@ -239,27 +238,26 @@ class _Tab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Tokens.of(context);
     final scheme = Theme.of(context).colorScheme;
     return InkWell(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.only(left: 10, right: 2),
         decoration: BoxDecoration(
-          color: selected ? t.canvas : null,
+          color: selected ? VaColors.canvas : null,
           border: Border(bottom: BorderSide(color: selected ? scheme.primary : Colors.transparent, width: 2)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.terminal, size: 14, color: t.muted),
+            Icon(Icons.terminal, size: 14, color: VaColors.muted),
             const SizedBox(width: 6),
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 160),
               child: Text(
                 label,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 12.5, color: faded ? t.faint : null),
+                style: TextStyle(fontSize: 12.5, color: faded ? VaColors.faint : null),
               ),
             ),
             IconButton(
@@ -282,11 +280,10 @@ class _KeyBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Tokens.of(context);
     Widget key(String label, String? send, {bool on = false, VoidCallback? tap}) => Padding(
       padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
       child: Material(
-        color: on ? Theme.of(context).colorScheme.primary.withValues(alpha: .25) : t.sunken,
+        color: on ? Theme.of(context).colorScheme.primary.withValues(alpha: .25) : VaColors.sunken,
         borderRadius: BorderRadius.circular(6),
         child: InkWell(
           borderRadius: BorderRadius.circular(6),
@@ -295,7 +292,7 @@ class _KeyBar extends StatelessWidget {
             constraints: const BoxConstraints(minWidth: 38),
             padding: const EdgeInsets.symmetric(horizontal: 8),
             alignment: Alignment.center,
-            child: Text(label, style: TextStyle(fontFamily: t.mono, fontSize: 13)),
+            child: Text(label, style: TextStyle(fontFamily: VaType.mono, fontSize: 13)),
           ),
         ),
       ),
@@ -303,7 +300,7 @@ class _KeyBar extends StatelessWidget {
     return Container(
       key: const ValueKey('terminal-keys'),
       height: 44,
-      color: t.panel,
+      color: VaColors.panel,
       child: ListView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 4),

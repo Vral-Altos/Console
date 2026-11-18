@@ -1,8 +1,8 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:ui_mesh/ui_mesh.dart';
 
-import 'theme.dart';
 
 /// A small line of recent values (nulls are gaps), scaled to [max] (or the
 /// data's own maximum).
@@ -107,14 +107,13 @@ class RingGauge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Tokens.of(context);
     final v = (value ?? 0).clamp(0.0, 1.0);
     final color = value == null
-        ? t.faint
+        ? VaColors.faint
         : v >= .9
-            ? t.bad
+            ? VaColors.danger
             : v >= .75
-                ? t.warn
+                ? VaColors.warning
                 : Theme.of(context).colorScheme.primary;
     return Column(mainAxisSize: MainAxisSize.min, children: [
       SizedBox(
@@ -125,11 +124,11 @@ class RingGauge extends StatelessWidget {
           duration: const Duration(milliseconds: 600),
           curve: Curves.easeOutCubic,
           builder: (context, a, _) => CustomPaint(
-            painter: _RingPainter(a, color, t.sunken),
+            painter: _RingPainter(a, color, VaColors.sunken),
             child: Center(
               child: Text(
                 value == null ? '—' : '${(v * 100).round()}%',
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(fontFamily: t.mono, fontSize: size * .19),
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(fontFamily: VaType.mono, fontSize: size * .19),
               ),
             ),
           ),
@@ -192,7 +191,6 @@ class _BarChartState extends State<BarChart> {
 
   @override
   Widget build(BuildContext context) {
-    final t = Tokens.of(context);
     final color = widget.color ?? Theme.of(context).colorScheme.primary;
     final text = Theme.of(context).textTheme;
     final shown = _hover ?? (widget.bars.isEmpty ? null : widget.bars.length - 1);
@@ -204,7 +202,7 @@ class _BarChartState extends State<BarChart> {
         child: shown == null
             ? const SizedBox.shrink()
             : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(fmt(widget.bars[shown].value), maxLines: 1, style: text.titleMedium?.copyWith(fontFamily: t.mono)),
+                Text(fmt(widget.bars[shown].value), maxLines: 1, style: text.titleMedium?.copyWith(fontFamily: VaType.mono)),
                 Text(widget.bars[shown].detail, maxLines: 1, overflow: TextOverflow.ellipsis, style: text.labelSmall),
               ]),
       ),
@@ -224,7 +222,7 @@ class _BarChartState extends State<BarChart> {
                   values: [for (final b in widget.bars) b.value / top],
                   color: color,
                   muted: color.withValues(alpha: .35),
-                  grid: t.border,
+                  grid: VaColors.border,
                   selected: shown,
                 ),
               ),
@@ -301,7 +299,6 @@ class SpendChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Tokens.of(context);
     return SizedBox(
       height: height,
       width: double.infinity,
@@ -311,8 +308,8 @@ class SpendChart extends StatelessWidget {
           daysInMonth,
           marks,
           Theme.of(context).colorScheme.primary,
-          t.border,
-          t.muted,
+          VaColors.border,
+          VaColors.muted,
           Theme.of(context).textTheme.labelSmall!,
         ),
       ),
@@ -432,7 +429,6 @@ class _TimeChartState extends State<TimeChart> {
 
   @override
   Widget build(BuildContext context) {
-    final t = Tokens.of(context);
     final text = Theme.of(context).textTheme;
     final fmt = widget.format ?? (v) => v >= 100 ? v.toStringAsFixed(0) : v.toStringAsFixed(v == v.roundToDouble() ? 0 : 2);
     double top = widget.max ?? 0;
@@ -478,7 +474,7 @@ class _TimeChartState extends State<TimeChart> {
               height: widget.height,
               width: c.maxWidth,
               child: CustomPaint(
-                painter: _TimePainter(widget.series, widget.stacked, top, t.border, shown, Theme.of(context).colorScheme.onSurface),
+                painter: _TimePainter(widget.series, widget.stacked, top, VaColors.border, shown, Theme.of(context).colorScheme.onSurface),
               ),
             ),
           ),

@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/models.dart';
 import '../../data/providers.dart';
-import '../theme.dart';
 import '../widgets.dart';
 import 'chat_naming.dart';
 import 'composer.dart';
@@ -27,7 +26,6 @@ class _ChatPageState extends ConsumerState<ChatPage> {
 
   @override
   Widget build(BuildContext context) {
-    final t = Tokens.of(context);
     final wide = MediaQuery.sizeOf(context).width >= 900;
     final selected = ref.watch(selectedThreadProvider);
     final onMenu = wide ? (_sidebar ? null : () => setState(() => _sidebar = true)) : () => _scaffold.currentState?.openDrawer();
@@ -42,7 +40,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         const SingleActivator(LogicalKeyboardKey.keyS, meta: true, shift: true): _toggleSidebar,
         const SingleActivator(LogicalKeyboardKey.keyS, control: true, shift: true): _toggleSidebar,
       },
-      child: _layout(context, t, wide, main),
+      child: _layout(context, wide, main),
     );
   }
 
@@ -55,7 +53,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     }
   }
 
-  Widget _layout(BuildContext context, Tokens t, bool wide, Widget main) {
+  Widget _layout(BuildContext context, bool wide, Widget main) {
     if (wide) {
       return Row(children: [
         AnimatedSize(
@@ -65,7 +63,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               ? SizedBox(
                   width: 280,
                   child: DecoratedBox(
-                    decoration: BoxDecoration(border: Border(right: BorderSide(color: t.border))),
+                    decoration: BoxDecoration(border: Border(right: BorderSide(color: VaColors.border))),
                     child: ThreadSidebar(onCollapse: () => setState(() => _sidebar = false)),
                   ),
                 )
@@ -76,9 +74,9 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     }
     return Scaffold(
       key: _scaffold,
-      backgroundColor: t.canvas,
+      backgroundColor: VaColors.canvas,
       drawer: Drawer(
-        backgroundColor: t.canvas,
+        backgroundColor: VaColors.canvas,
         width: 300,
         shape: const RoundedRectangleBorder(),
         child: SafeArea(child: ThreadSidebar(onPicked: () => _scaffold.currentState?.closeDrawer())),
@@ -116,11 +114,10 @@ class _ChatHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Tokens.of(context);
     return Container(
       height: 56,
       padding: const EdgeInsets.symmetric(horizontal: 8),
-      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.border))),
+      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: VaColors.border))),
       child: Row(children: [
         if (onMenu != null)
           IconButton(tooltip: 'Conversations', onPressed: onMenu, icon: const Icon(Icons.menu)),
@@ -190,7 +187,6 @@ class _ConversationViewState extends ConsumerState<ConversationView> {
 
   @override
   Widget build(BuildContext context) {
-    final t = Tokens.of(context);
     final text = Theme.of(context).textTheme;
     final threads = ref.watch(threadsProvider).value;
     final thread = threads?.where((th) => th.id == widget.threadId).firstOrNull;
@@ -249,7 +245,7 @@ class _ConversationViewState extends ConsumerState<ConversationView> {
       Expanded(
         child: Stack(children: [
           if (messagesValue.hasError)
-            AsyncView(value: messagesValue, data: (_) => const SizedBox.shrink())
+            VaAsyncView(value: messagesValue, data: (_) => const SizedBox.shrink())
           else if (!loaded)
             const SingleChildScrollView(child: ChatColumn(child: ConversationSkeleton()))
           else
@@ -282,7 +278,7 @@ class _ConversationViewState extends ConsumerState<ConversationView> {
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [t.canvas.withValues(alpha: 0), t.canvas],
+                    colors: [VaColors.canvas.withValues(alpha: 0), VaColors.canvas],
                   ),
                 ),
               ),
@@ -303,8 +299,8 @@ class _ConversationViewState extends ConsumerState<ConversationView> {
                   child: IgnorePointer(
                     ignoring: !_showJump,
                     child: Material(
-                      color: t.panel,
-                      shape: StadiumBorder(side: BorderSide(color: t.border)),
+                      color: VaColors.panel,
+                      shape: StadiumBorder(side: BorderSide(color: VaColors.border)),
                       elevation: 3,
                       shadowColor: Colors.black26,
                       child: InkWell(
@@ -318,10 +314,10 @@ class _ConversationViewState extends ConsumerState<ConversationView> {
                             child: Padding(
                               padding: EdgeInsets.symmetric(horizontal: unseen ? 14 : 9, vertical: 9),
                               child: Row(mainAxisSize: MainAxisSize.min, children: [
-                                Icon(Icons.arrow_downward_rounded, size: 18, color: unseen ? Theme.of(context).colorScheme.primary : null),
+                                Icon(Icons.arrow_downward_rounded, size: 18, color: unseen ? VaColors.accentText : null),
                                 if (unseen) ...[
                                   const SizedBox(width: 6),
-                                  Text('New messages', style: text.labelLarge?.copyWith(color: Theme.of(context).colorScheme.primary)),
+                                  Text('New messages', style: text.labelLarge?.copyWith(color: VaColors.accentText)),
                                 ],
                               ]),
                             ),
@@ -342,9 +338,9 @@ class _ConversationViewState extends ConsumerState<ConversationView> {
           child: Padding(
             padding: const EdgeInsets.all(14),
             child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              Icon(Icons.lock_outline, size: 16, color: t.muted),
+              Icon(Icons.lock_outline, size: 16, color: VaColors.muted),
               const SizedBox(width: 8),
-              Flexible(child: Text('This conversation is closed.', style: text.bodySmall?.copyWith(color: t.muted))),
+              Flexible(child: Text('This conversation is closed.', style: text.bodySmall?.copyWith(color: VaColors.muted))),
               const SizedBox(width: 12),
               FilledButton.tonal(
                 onPressed: () => openChat(ref, agent: agent),
@@ -442,7 +438,6 @@ class NewChatView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final t = Tokens.of(context);
     final text = Theme.of(context).textTheme;
     final agent = ref.watch(newChatAgentProvider);
     final agents = ref.watch(agentsProvider);
@@ -477,9 +472,9 @@ class NewChatView extends ConsumerWidget {
                   style: text.headlineMedium?.copyWith(fontWeight: FontWeight.w600, letterSpacing: -.5),
                 ),
                 const SizedBox(height: 6),
-                Text('Who do you want to talk to?', style: text.bodyLarge?.copyWith(color: t.muted)),
+                Text('Who do you want to talk to?', style: text.bodyLarge?.copyWith(color: VaColors.muted)),
                 const SizedBox(height: 28),
-                ResponsiveGrid(
+                VaResponsiveGrid(
                   minWidth: 220,
                   gap: 10,
                   children: [
@@ -534,7 +529,6 @@ class _AgentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Tokens.of(context);
     final scheme = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
     return Semantics(
@@ -542,10 +536,10 @@ class _AgentCard extends StatelessWidget {
       button: true,
       label: 'Agent ${agentLabel(name)}',
       child: Material(
-        color: selected ? scheme.primary.withValues(alpha: .08) : t.panel,
+        color: selected ? scheme.primary.withValues(alpha: .08) : VaColors.panel,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),
-          side: BorderSide(color: selected ? scheme.primary.withValues(alpha: .6) : t.border, width: selected ? 1.4 : 1),
+          side: BorderSide(color: selected ? scheme.primary.withValues(alpha: .6) : VaColors.border, width: selected ? 1.4 : 1),
         ),
         child: InkWell(
           borderRadius: BorderRadius.circular(14),
@@ -561,11 +555,11 @@ class _AgentCard extends StatelessWidget {
                   if (description != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 2),
-                      child: Text(description!, maxLines: 2, overflow: TextOverflow.ellipsis, style: text.bodySmall?.copyWith(color: t.muted)),
+                      child: Text(description!, maxLines: 2, overflow: TextOverflow.ellipsis, style: text.bodySmall?.copyWith(color: VaColors.muted)),
                     ),
                   if (where.isNotEmpty) ...[
                     const SizedBox(height: 6),
-                    Text(where, style: text.labelSmall?.copyWith(color: t.faint)),
+                    Text(where, style: text.labelSmall?.copyWith(color: VaColors.faint)),
                   ],
                 ]),
               ),
@@ -587,7 +581,6 @@ class _ProjectMenu extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final t = Tokens.of(context);
     final filing = ref.watch(newChatProjectProvider);
     final projects = ref.watch(chatProjectsProvider).value ?? const <ChatProject>[];
     final label = filing == null ? 'Auto' : filing.project ?? 'General';
@@ -606,16 +599,16 @@ class _ProjectMenu extends ConsumerWidget {
       ],
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(color: t.sunken, borderRadius: BorderRadius.circular(10)),
+        decoration: BoxDecoration(color: VaColors.sunken, borderRadius: BorderRadius.circular(10)),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(filing == null ? Icons.auto_awesome_outlined : Icons.folder_outlined, size: 16, color: t.muted),
+          Icon(filing == null ? Icons.auto_awesome_outlined : Icons.folder_outlined, size: 16, color: VaColors.muted),
           if (!compact) ...[
             const SizedBox(width: 6),
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 110),
               child: Text(label, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.labelLarge),
             ),
-            Icon(Icons.expand_more, size: 18, color: t.muted),
+            Icon(Icons.expand_more, size: 18, color: VaColors.muted),
           ],
         ]),
       ),
@@ -633,7 +626,6 @@ class _AgentMenu extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final t = Tokens.of(context);
     return PopupMenuButton<String>(
       tooltip: 'Choose the agent',
       initialValue: selected,
@@ -647,14 +639,14 @@ class _AgentMenu extends ConsumerWidget {
       ],
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(color: t.sunken, borderRadius: BorderRadius.circular(10)),
+        decoration: BoxDecoration(color: VaColors.sunken, borderRadius: BorderRadius.circular(10)),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           AgentAvatar(agent: selected, size: 18),
           if (!compact) ...[
             const SizedBox(width: 8),
             Flexible(child: Text(agentLabel(selected), overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.labelLarge)),
           ],
-          Icon(Icons.expand_more, size: 18, color: t.muted),
+          Icon(Icons.expand_more, size: 18, color: VaColors.muted),
         ]),
       ),
     );

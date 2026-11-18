@@ -2,7 +2,6 @@ import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'attachments.dart';
@@ -167,14 +166,6 @@ class Drafts extends Notifier<Map<String, String>> {
   @override
   Map<String, String> build() => const {};
   void set(String key, String text) => state = {...state, key: text};
-}
-
-final themeModeProvider = NotifierProvider<ThemeModeNotifier, ThemeMode>(ThemeModeNotifier.new);
-
-class ThemeModeNotifier extends Notifier<ThemeMode> {
-  @override
-  ThemeMode build() => ThemeMode.system;
-  void set(ThemeMode mode) => state = mode;
 }
 
 /// Whether a worker is serving: its heartbeat is fresh (2 minutes).

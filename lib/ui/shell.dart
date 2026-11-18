@@ -10,7 +10,6 @@ import 'logs_page.dart';
 import 'overview_page.dart';
 import 'projects_page.dart';
 import 'system_page.dart';
-import 'theme.dart';
 import 'topology/topology_page.dart';
 import 'widgets.dart';
 
@@ -74,7 +73,7 @@ class Shell extends ConsumerWidget {
           bottomNavigationBar: wide || keyboard
               ? null
               : DecoratedBox(
-                  decoration: BoxDecoration(border: Border(top: BorderSide(color: Tokens.of(context).border))),
+                  decoration: BoxDecoration(border: Border(top: BorderSide(color: VaColors.border))),
                   child: NavigationBar(
                     selectedIndex: page.index,
                     onDestinationSelected: (i) => go(ConsolePage.values[i]),
@@ -105,15 +104,12 @@ class _Sidebar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final t = Tokens.of(context);
     final text = Theme.of(context).textTheme;
     final scheme = Theme.of(context).colorScheme;
     final user = ref.watch(authStateProvider).value;
-    final mode = ref.watch(themeModeProvider);
-    final dark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       width: 76,
-      decoration: BoxDecoration(color: t.canvas, border: Border(right: BorderSide(color: t.border))),
+      decoration: BoxDecoration(color: VaColors.canvas, border: Border(right: BorderSide(color: VaColors.border))),
       child: Column(children: [
         const SizedBox(height: 14),
         Tooltip(
@@ -123,10 +119,10 @@ class _Sidebar extends ConsumerWidget {
             height: 38,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              gradient: LinearGradient(colors: [scheme.primary, t.series[3]], begin: Alignment.topLeft, end: Alignment.bottomRight),
+              gradient: const LinearGradient(colors: [VaColors.accent, VaColors.accentPressed], begin: Alignment.topLeft, end: Alignment.bottomRight),
               borderRadius: BorderRadius.circular(11),
             ),
-            child: const Text('VA', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 14, letterSpacing: .5)),
+            child: const Text('VA', style: TextStyle(color: VaColors.onAccent, fontWeight: FontWeight.w700, fontSize: 14, letterSpacing: .5)),
           ),
         ),
         const SizedBox(height: 22),
@@ -157,7 +153,7 @@ class _Sidebar extends ConsumerWidget {
                         label: Text(badges[d.page] ?? ''),
                         offset: const Offset(-4, 2),
                         child: Center(
-                          child: Icon(d.page == page ? d.selected : d.icon, size: 21, color: d.page == page ? scheme.primary : t.muted),
+                          child: Icon(d.page == page ? d.selected : d.icon, size: 21, color: d.page == page ? VaColors.accentText : VaColors.muted),
                         ),
                       ),
                     ),
@@ -165,7 +161,7 @@ class _Sidebar extends ConsumerWidget {
                     Text(
                       d.label,
                       style: text.labelSmall?.copyWith(
-                        color: d.page == page ? scheme.onSurface : t.muted,
+                        color: d.page == page ? scheme.onSurface : VaColors.muted,
                         fontWeight: d.page == page ? FontWeight.w600 : FontWeight.w500,
                       ),
                     ),
@@ -177,11 +173,6 @@ class _Sidebar extends ConsumerWidget {
         const Spacer(),
         const PlacementChip(),
         const SizedBox(height: 10),
-        IconButton(
-          tooltip: dark ? 'Light theme' : 'Dark theme',
-          onPressed: () => ref.read(themeModeProvider.notifier).set(dark ? ThemeMode.light : ThemeMode.dark),
-          icon: Icon(mode == ThemeMode.system ? Icons.brightness_auto_outlined : dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined, color: t.muted),
-        ),
         PopupMenuButton<String>(
           tooltip: user?.email ?? 'Account',
           onSelected: (v) {
@@ -195,7 +186,7 @@ class _Sidebar extends ConsumerWidget {
             padding: const EdgeInsets.all(8),
             child: CircleAvatar(
               radius: 16,
-              backgroundColor: t.sunken,
+              backgroundColor: VaColors.sunken,
               foregroundImage: user?.photoURL == null ? null : NetworkImage(user!.photoURL!),
               child: Text((user?.email ?? '?')[0].toUpperCase(), style: text.labelLarge),
             ),

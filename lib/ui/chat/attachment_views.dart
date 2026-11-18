@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/models.dart';
 import '../../data/providers.dart';
-import '../theme.dart';
 import '../widgets.dart';
 import 'file_io.dart';
 
@@ -60,7 +59,6 @@ class FileChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Tokens.of(context);
     final text = Theme.of(context).textTheme;
     final failed = error != null;
     final sub = failed ? error! : [fileSize(size), if (progress != null) '${(progress! * 100).round()}%'].where((s) => s.isNotEmpty).join(' · ');
@@ -68,10 +66,10 @@ class FileChip extends StatelessWidget {
       label: 'Attachment $name',
       button: onTap != null,
       child: Material(
-        color: t.sunken,
+        color: VaColors.sunken,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: failed ? t.bad.withValues(alpha: .6) : t.border),
+          side: BorderSide(color: failed ? VaColors.danger.withValues(alpha: .6) : VaColors.border),
         ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -87,8 +85,8 @@ class FileChip extends StatelessWidget {
                     height: 36,
                     child: thumbnail ??
                         ColoredBox(
-                          color: t.panel,
-                          child: Icon(failed ? Icons.error_outline : fileIcon(contentType, name), size: 19, color: failed ? t.bad : t.muted),
+                          color: VaColors.panel,
+                          child: Icon(failed ? Icons.error_outline : fileIcon(contentType, name), size: 19, color: failed ? VaColors.danger : VaColors.muted),
                         ),
                   ),
                 ),
@@ -98,7 +96,7 @@ class FileChip extends StatelessWidget {
                   child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: text.labelMedium?.copyWith(fontWeight: FontWeight.w600)),
                     if (sub.isNotEmpty)
-                      Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: text.labelSmall?.copyWith(color: failed ? t.bad : t.faint)),
+                      Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: text.labelSmall?.copyWith(color: failed ? VaColors.danger : VaColors.faint)),
                   ]),
                 ),
                 if (onRemove != null)
@@ -107,7 +105,7 @@ class FileChip extends StatelessWidget {
                     visualDensity: VisualDensity.compact,
                     iconSize: 16,
                     onPressed: onRemove,
-                    icon: Icon(Icons.close, color: t.muted),
+                    icon: Icon(Icons.close, color: VaColors.muted),
                   ),
               ]),
             ),
@@ -182,13 +180,12 @@ class _ImageTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final t = Tokens.of(context);
     final bytes = ref.watch(attachmentBytesProvider(attachment));
     return Semantics(
       label: 'Image ${attachment.name}',
       button: true,
       child: Material(
-        color: t.sunken,
+        color: VaColors.sunken,
         borderRadius: BorderRadius.circular(14),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -200,7 +197,7 @@ class _ImageTile extends ConsumerWidget {
               AsyncData(value: final b?) => Image.memory(b, fit: BoxFit.cover, gaplessPlayback: true),
               AsyncData() || AsyncError() => Center(
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(Icons.broken_image_outlined, color: t.muted),
+                  Icon(Icons.broken_image_outlined, color: VaColors.muted),
                   const SizedBox(height: 4),
                   Text(attachment.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.labelSmall),
                 ]),

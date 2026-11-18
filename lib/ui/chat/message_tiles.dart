@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/models.dart';
 import '../../data/providers.dart';
-import '../theme.dart';
 import '../widgets.dart';
 import 'attachment_views.dart';
 import 'markdown_view.dart';
@@ -79,7 +78,7 @@ class _ActionIconState extends State<_ActionIcon> {
     tooltip: widget.tooltip,
     visualDensity: VisualDensity.compact,
     iconSize: 16,
-    color: Tokens.of(context).muted,
+    color: VaColors.muted,
     onPressed: () async {
       await widget.onPressed();
       if (widget.doneIcon == null || !mounted) return;
@@ -105,7 +104,6 @@ class OperatorBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Tokens.of(context);
     final text = Theme.of(context).textTheme;
     return _Hoverable(
       builder: (context, hover) {
@@ -127,7 +125,7 @@ class OperatorBubble extends StatelessWidget {
                     Flexible(
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-                        decoration: BoxDecoration(color: t.userBubble, borderRadius: BorderRadius.circular(18)),
+                        decoration: BoxDecoration(color: VaColors.raised, borderRadius: BorderRadius.circular(18)),
                         child: Text.rich(mentionSpan(context, message.text, message.mentions, text.bodyLarge)),
                       ),
                     ),
@@ -143,7 +141,7 @@ class OperatorBubble extends StatelessWidget {
                     if (message.createdAt != null)
                       Padding(
                         padding: const EdgeInsets.only(right: 4),
-                        child: Text(clockTime(context, message.createdAt!), style: text.labelSmall?.copyWith(color: t.faint)),
+                        child: Text(clockTime(context, message.createdAt!), style: text.labelSmall?.copyWith(color: VaColors.faint)),
                       ),
                     _ActionIcon(
                       icon: Icons.content_copy_rounded,
@@ -198,7 +196,6 @@ class AgentReply extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Tokens.of(context);
     final text = Theme.of(context).textTheme;
     final m = message;
     final meta = [
@@ -231,7 +228,7 @@ class AgentReply extends StatelessWidget {
             children: [
               _AgentHeader(
                 agent: agent,
-                trailing: m.stopped ? StatusPill(label: 'Stopped', color: t.warn, dense: true) : null,
+                trailing: m.stopped ? VaStatusPill(label: 'Stopped', color: VaColors.warning, dense: true) : null,
               ),
               if (m.tools.isNotEmpty)
                 Padding(
@@ -270,7 +267,7 @@ class AgentReply extends StatelessWidget {
                               usage,
                               key: const Key('reply-usage'),
                               maxLines: 2,
-                              style: text.labelSmall?.copyWith(color: t.muted, fontFeatures: const [FontFeature.tabularFigures()]),
+                              style: text.labelSmall?.copyWith(color: VaColors.muted, fontFeatures: const [FontFeature.tabularFigures()]),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
@@ -280,14 +277,14 @@ class AgentReply extends StatelessWidget {
                                 'Quota is the account\'s 5-hour and 7-day usage after this reply.',
                             child: Padding(
                               padding: const EdgeInsets.only(left: 4),
-                              child: Icon(Icons.info_outline, size: 13, color: t.faint),
+                              child: Icon(Icons.info_outline, size: 13, color: VaColors.faint),
                             ),
                           ),
                         // Where and when, on hover only: hidden, it takes no
                         // room from the usage.
                         if (meta.isNotEmpty && hover)
                           Flexible(
-                            child: Text('  $meta', style: text.labelSmall?.copyWith(color: t.faint), overflow: TextOverflow.ellipsis),
+                            child: Text('  $meta', style: text.labelSmall?.copyWith(color: VaColors.faint), overflow: TextOverflow.ellipsis),
                           ),
                       ]),
                     ),
@@ -338,7 +335,6 @@ class ToolsUsed extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Tokens.of(context);
     final text = Theme.of(context).textTheme;
     final rows = counted(tools);
     return Column(
@@ -352,15 +348,15 @@ class ToolsUsed extends StatelessWidget {
               SizedBox(
                 width: 22,
                 child: Column(children: [
-                  Expanded(child: Center(child: Container(width: 1, color: i == 0 ? Colors.transparent : t.border))),
-                  Icon(icon(name), size: 14, color: t.muted),
-                  Expanded(child: Center(child: Container(width: 1, color: i == rows.length - 1 ? Colors.transparent : t.border))),
+                  Expanded(child: Center(child: Container(width: 1, color: i == 0 ? Colors.transparent : VaColors.border))),
+                  Icon(icon(name), size: 14, color: VaColors.muted),
+                  Expanded(child: Center(child: Container(width: 1, color: i == rows.length - 1 ? Colors.transparent : VaColors.border))),
                 ]),
               ),
               const SizedBox(width: 8),
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Text(n > 1 ? '${label(name)} ×$n' : label(name), style: text.bodySmall?.copyWith(color: t.muted)),
+                child: Text(n > 1 ? '${label(name)} ×$n' : label(name), style: text.bodySmall?.copyWith(color: VaColors.muted)),
               ),
             ]),
           ),
@@ -387,7 +383,6 @@ class _ToolActivityState extends State<ToolActivity> {
 
   @override
   Widget build(BuildContext context) {
-    final t = Tokens.of(context);
     final text = Theme.of(context).textTheme;
     final n = widget.tools.length;
     final distinct = ToolsUsed.counted(widget.tools);
@@ -407,15 +402,15 @@ class _ToolActivityState extends State<ToolActivity> {
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 2),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
-              Icon(ToolsUsed.icon(widget.tools.last), size: 15, color: t.muted),
+              Icon(ToolsUsed.icon(widget.tools.last), size: 15, color: VaColors.muted),
               const SizedBox(width: 8),
-              Flexible(child: Text(summary, style: text.bodySmall?.copyWith(color: t.muted, fontWeight: FontWeight.w500))),
+              Flexible(child: Text(summary, style: text.bodySmall?.copyWith(color: VaColors.muted, fontWeight: FontWeight.w500))),
               const SizedBox(width: 2),
               AnimatedRotation(
                 turns: _open ? .25 : 0,
                 duration: const Duration(milliseconds: 180),
                 curve: Curves.easeOutCubic,
-                child: Icon(Icons.chevron_right_rounded, size: 18, color: t.faint),
+                child: Icon(Icons.chevron_right_rounded, size: 18, color: VaColors.faint),
               ),
             ]),
           ),
@@ -473,7 +468,6 @@ class PendingReply extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final t = Tokens.of(context);
     final text = Theme.of(context).textTheme;
     final m = message;
     final running = m.status == MessageStatus.running;
@@ -522,19 +516,19 @@ class PendingReply extends ConsumerWidget {
                 Flexible(
                   child: ShimmerText(
                     '${status.replaceAll(RegExp(r'…+$'), '')}…',
-                    style: text.bodyMedium?.copyWith(color: t.muted, fontWeight: FontWeight.w500),
+                    style: text.bodyMedium?.copyWith(color: VaColors.muted, fontWeight: FontWeight.w500),
                   ),
                 ),
                 const SizedBox(width: 10),
                 Elapsed(
                   since: running ? m.claimedAt ?? m.createdAt : m.createdAt,
-                  style: text.labelSmall?.copyWith(fontFamily: t.mono, color: t.faint),
+                  style: text.labelSmall?.copyWith(fontFamily: VaType.mono, color: VaColors.faint),
                 ),
-                if (host != null) Text(' · $host', style: text.labelSmall?.copyWith(color: t.faint)),
+                if (host != null) Text(' · $host', style: text.labelSmall?.copyWith(color: VaColors.faint)),
                 const SizedBox(width: 4),
                 TextButton(
                   onPressed: m.cancelRequested ? null : onStop,
-                  style: TextButton.styleFrom(visualDensity: VisualDensity.compact, foregroundColor: t.muted, textStyle: text.labelMedium),
+                  style: TextButton.styleFrom(visualDensity: VisualDensity.compact, foregroundColor: VaColors.muted, textStyle: text.labelMedium),
                   child: Text(running ? 'Stop' : 'Cancel'),
                 ),
               ],
@@ -567,7 +561,7 @@ class _ShimmerTextState extends State<ShimmerText> with SingleTickerProviderStat
 
   @override
   Widget build(BuildContext context) {
-    final base = widget.style?.color ?? Tokens.of(context).muted;
+    final base = widget.style?.color ?? VaColors.muted;
     final bright = Theme.of(context).colorScheme.onSurface;
     return AnimatedBuilder(
       animation: _c,
@@ -686,11 +680,10 @@ class _ConversationSkeletonState extends State<ConversationSkeleton> with Single
 
   @override
   Widget build(BuildContext context) {
-    final t = Tokens.of(context);
     Widget bar(double w, {double h = 12, double r = 6}) => FractionallySizedBox(
       widthFactor: w,
       alignment: Alignment.centerLeft,
-      child: Container(height: h, decoration: BoxDecoration(color: t.sunken, borderRadius: BorderRadius.circular(r))),
+      child: Container(height: h, decoration: BoxDecoration(color: VaColors.sunken, borderRadius: BorderRadius.circular(r))),
     );
     return Semantics(
       label: 'Loading the conversation',
@@ -702,7 +695,7 @@ class _ConversationSkeletonState extends State<ConversationSkeleton> with Single
             Align(alignment: Alignment.centerRight, child: SizedBox(width: 260, child: bar(1, h: 40, r: 18))),
             const SizedBox(height: 28),
             Row(children: [
-              Container(width: 24, height: 24, decoration: BoxDecoration(color: t.sunken, borderRadius: BorderRadius.circular(8))),
+              Container(width: 24, height: 24, decoration: BoxDecoration(color: VaColors.sunken, borderRadius: BorderRadius.circular(8))),
               const SizedBox(width: 10),
               SizedBox(width: 70, child: bar(1)),
             ]),
@@ -727,23 +720,22 @@ class FailedNote extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Tokens.of(context);
     final text = Theme.of(context).textTheme;
     return Padding(
       padding: const EdgeInsets.only(top: 12),
       child: Container(
         padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
         decoration: BoxDecoration(
-          color: t.bad.withValues(alpha: .08),
+          color: VaColors.danger.withValues(alpha: .08),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: t.bad.withValues(alpha: .3)),
+          border: Border.all(color: VaColors.danger.withValues(alpha: .3)),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
               padding: const EdgeInsets.only(top: 2),
-              child: Icon(Icons.error_outline, size: 18, color: t.bad),
+              child: Icon(Icons.error_outline, size: 18, color: VaColors.danger),
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -752,7 +744,7 @@ class FailedNote extends StatelessWidget {
                 children: [
                   Text(
                     'This turn failed',
-                    style: text.labelLarge?.copyWith(color: t.bad, fontWeight: FontWeight.w600),
+                    style: text.labelLarge?.copyWith(color: VaColors.danger, fontWeight: FontWeight.w600),
                   ),
                   const SizedBox(height: 2),
                   Text(message.error ?? 'Unknown error.', style: text.bodySmall),
@@ -776,20 +768,19 @@ class SystemNote extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Tokens.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 16),
       child: Row(
         children: [
-          Expanded(child: Divider(color: t.border)),
+          Expanded(child: Divider(color: VaColors.border)),
           const SizedBox(width: 12),
-          Icon(icon, size: 14, color: t.faint),
+          Icon(icon, size: 14, color: VaColors.faint),
           const SizedBox(width: 6),
           Flexible(
             child: Text(text, style: Theme.of(context).textTheme.labelSmall, textAlign: TextAlign.center),
           ),
           const SizedBox(width: 12),
-          Expanded(child: Divider(color: t.border)),
+          Expanded(child: Divider(color: VaColors.border)),
         ],
       ),
     );

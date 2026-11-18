@@ -7,7 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/ide_connection.dart';
 import '../../data/models.dart';
 import '../../data/providers.dart';
-import '../theme.dart';
 import '../widgets.dart';
 import 'code_editor.dart';
 import 'ide_workspace.dart';
@@ -175,13 +174,12 @@ class _IdePageState extends ConsumerState<IdePage> {
 
   @override
   Widget build(BuildContext context) {
-    final t = Tokens.of(context);
     ref.watch(devstationsProvider); // keeps the state below fresh
     final d = _devstation();
     final body = switch (conn.phase) {
       IdePhase.failed => _Failed(conn: conn, devstation: d, id: widget.devstationId),
       IdePhase.connecting when _firstReady => const Center(child: CircularProgressIndicator()),
-      _ => ListenableBuilder(listenable: ws, builder: (context, _) => _wide ? _desktop(t) : _phone(t)),
+      _ => ListenableBuilder(listenable: ws, builder: (context, _) => _wide ? _desktop() : _phone()),
     };
     return PopScope(
       canPop: !ws.anyDirty,
@@ -213,7 +211,7 @@ class _IdePageState extends ConsumerState<IdePage> {
           const SingleActivator(LogicalKeyboardKey.keyS, control: true): _save,
         },
         child: Scaffold(
-          backgroundColor: t.canvas,
+          backgroundColor: VaColors.canvas,
           appBar: AppBar(
             titleSpacing: 0,
             title: Row(
@@ -282,7 +280,7 @@ class _IdePageState extends ConsumerState<IdePage> {
     );
   }
 
-  Widget _desktop(Tokens t) => Row(
+  Widget _desktop() => Row(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       SizedBox(
@@ -313,7 +311,7 @@ class _IdePageState extends ConsumerState<IdePage> {
     ],
   );
 
-  Widget _phone(Tokens t) => IndexedStack(
+  Widget _phone() => IndexedStack(
     index: _pane.index,
     children: [
       _FileTree(ws: ws, onOpen: _open, onTerminalHere: _terminalHere),
@@ -337,14 +335,13 @@ class _ConnPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Tokens.of(context);
     final (label, color, pulse) = switch (conn.phase) {
-      IdePhase.connecting => ('Connecting', t.info, true),
-      IdePhase.ready => ('Connected', t.ok, false),
-      IdePhase.reconnecting => ('Reconnecting', t.warn, true),
-      IdePhase.failed => ('Not connected', t.bad, false),
+      IdePhase.connecting => ('Connecting', VaColors.info, true),
+      IdePhase.ready => ('Connected', VaColors.success, false),
+      IdePhase.reconnecting => ('Reconnecting', VaColors.warning, true),
+      IdePhase.failed => ('Not connected', VaColors.danger, false),
     };
-    return StatusPill(label: label, color: color, pulse: pulse, dense: true);
+    return VaStatusPill(label: label, color: color, pulse: pulse, dense: true);
   }
 }
 
@@ -357,7 +354,6 @@ class _Failed extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final t = Tokens.of(context);
     final text = Theme.of(context).textTheme;
     final d = devstation;
     final stopped = conn.errorCode == 'not-running';
@@ -370,7 +366,7 @@ class _Failed extends ConsumerWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(stopped ? Icons.power_settings_new : Icons.link_off, size: 36, color: t.muted),
+              Icon(stopped ? Icons.power_settings_new : Icons.link_off, size: 36, color: VaColors.muted),
               const SizedBox(height: 12),
               Text(
                 starting ? 'Starting $id…' : (stopped ? '$id is stopped' : 'Could not connect'),
@@ -384,7 +380,7 @@ class _Failed extends ConsumerWidget {
                     : stopped
                     ? 'It stops itself after 20 idle minutes. Start it to open the IDE; it costs only while running.'
                     : conn.error ?? '',
-                style: text.bodySmall?.copyWith(color: t.muted),
+                style: text.bodySmall?.copyWith(color: VaColors.muted),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
@@ -421,7 +417,6 @@ class _Splitter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Tokens.of(context);
     final h = axis == Axis.horizontal;
     return MouseRegion(
       cursor: h ? SystemMouseCursors.resizeColumn : SystemMouseCursors.resizeRow,
@@ -433,7 +428,7 @@ class _Splitter extends StatelessWidget {
           width: h ? 5 : null,
           height: h ? null : 5,
           alignment: Alignment.center,
-          child: Container(width: h ? 1 : null, height: h ? null : 1, color: t.border),
+          child: Container(width: h ? 1 : null, height: h ? null : 1, color: VaColors.border),
         ),
       ),
     );
@@ -519,11 +514,10 @@ class _FileTree extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Tokens.of(context);
     final rows = ws.rows();
     final root = ws.root;
     return Container(
-      color: t.panel,
+      color: VaColors.panel,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -531,7 +525,7 @@ class _FileTree extends StatelessWidget {
             height: 34,
             padding: const EdgeInsets.only(left: 12),
             decoration: BoxDecoration(
-              border: Border(bottom: BorderSide(color: t.border)),
+              border: Border(bottom: BorderSide(color: VaColors.border)),
             ),
             child: Row(
               children: [
@@ -539,7 +533,7 @@ class _FileTree extends StatelessWidget {
                   child: Text(
                     root == null ? '' : baseName(root).toUpperCase(),
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(color: t.muted, letterSpacing: .6),
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(color: VaColors.muted, letterSpacing: .6),
                   ),
                 ),
                 IconButton(
@@ -587,7 +581,7 @@ class _FileTree extends StatelessWidget {
           if (root != null && ws.failed[root] != null)
             Padding(
               padding: const EdgeInsets.all(12),
-              child: Text(ws.failed[root]!, style: TextStyle(color: t.bad, fontSize: 12)),
+              child: Text(ws.failed[root]!, style: TextStyle(color: VaColors.danger, fontSize: 12)),
             ),
           Expanded(
             child: ListView.builder(
@@ -618,21 +612,21 @@ class _FileTree extends StatelessWidget {
                                           height: 10,
                                           child: CircularProgressIndicator(strokeWidth: 1.5),
                                         )
-                                      : Icon(open ? Icons.expand_more : Icons.chevron_right, size: 16, color: t.muted))
+                                      : Icon(open ? Icons.expand_more : Icons.chevron_right, size: 16, color: VaColors.muted))
                                 : null,
                           ),
                           const SizedBox(width: 2),
                           Icon(
                             e.dir ? (open ? Icons.folder_open : Icons.folder) : Icons.description_outlined,
                             size: 15,
-                            color: e.dir ? t.info : t.muted,
+                            color: e.dir ? VaColors.info : VaColors.muted,
                           ),
                           const SizedBox(width: 6),
                           Expanded(
                             child: Text(
                               e.name,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(fontSize: 13, color: e.name.startsWith('.') ? t.muted : null),
+                              style: TextStyle(fontSize: 13, color: e.name.startsWith('.') ? VaColors.muted : null),
                             ),
                           ),
                         ],
@@ -658,14 +652,13 @@ class _Editors extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Tokens.of(context);
     final scheme = Theme.of(context).colorScheme;
     final f = ws.current;
     if (f == null) {
       return Center(
         child: Text(
           compact ? 'Open a file from Files.' : 'Open a file from the tree, or ⌘P to find one.',
-          style: TextStyle(color: t.muted),
+          style: TextStyle(color: VaColors.muted),
         ),
       );
     }
@@ -675,8 +668,8 @@ class _Editors extends StatelessWidget {
         Container(
           height: 34,
           decoration: BoxDecoration(
-            color: t.panel,
-            border: Border(bottom: BorderSide(color: t.border)),
+            color: VaColors.panel,
+            border: Border(bottom: BorderSide(color: VaColors.border)),
           ),
           child: Row(
             children: [
@@ -691,7 +684,7 @@ class _Editors extends StatelessWidget {
                         child: Container(
                           padding: const EdgeInsets.only(left: 12, right: 2),
                           decoration: BoxDecoration(
-                            color: i == ws.active ? t.canvas : null,
+                            color: i == ws.active ? VaColors.canvas : null,
                             border: Border(
                               bottom: BorderSide(color: i == ws.active ? scheme.primary : Colors.transparent, width: 2),
                             ),
@@ -702,7 +695,7 @@ class _Editors extends StatelessWidget {
                               if (file.dirty)
                                 Padding(
                                   padding: const EdgeInsets.only(left: 6),
-                                  child: Icon(Icons.circle, size: 8, color: t.warn, semanticLabel: 'unsaved'),
+                                  child: Icon(Icons.circle, size: 8, color: VaColors.warning, semanticLabel: 'unsaved'),
                                 ),
                               IconButton(
                                 tooltip: 'Close',
@@ -737,13 +730,13 @@ class _Editors extends StatelessWidget {
           child: Text(
             f.path,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 11, color: t.faint, fontFamily: t.mono),
+            style: TextStyle(fontSize: 12, color: VaColors.faint, fontFamily: VaType.mono),
           ),
         ),
         Expanded(
           child: f.note != null
               ? Center(
-                  child: Text(f.note!, style: TextStyle(color: t.muted)),
+                  child: Text(f.note!, style: TextStyle(color: VaColors.muted)),
                 )
               : CodeEditor(key: ValueKey(f), controller: f.controller, onSave: () => onSave(f)),
         ),
@@ -801,7 +794,6 @@ class _QuickOpenState extends State<_QuickOpen> {
 
   @override
   Widget build(BuildContext context) {
-    final t = Tokens.of(context);
     return Dialog(
       alignment: Alignment.topCenter,
       insetPadding: const EdgeInsets.fromLTRB(16, 60, 16, 16),
@@ -830,7 +822,7 @@ class _QuickOpenState extends State<_QuickOpen> {
             if (_error != null)
               Padding(
                 padding: const EdgeInsets.all(8),
-                child: Text(_error!, style: TextStyle(color: t.bad)),
+                child: Text(_error!, style: TextStyle(color: VaColors.danger)),
               ),
             Flexible(
               child: ListView(
@@ -842,7 +834,7 @@ class _QuickOpenState extends State<_QuickOpen> {
                       title: Text(baseName(p)),
                       subtitle: Text(
                         _rel(p),
-                        style: TextStyle(fontFamily: t.mono, fontSize: 11, color: t.muted),
+                        style: TextStyle(fontFamily: VaType.mono, fontSize: 12, color: VaColors.muted),
                       ),
                       onTap: () => Navigator.pop(context, p),
                     ),

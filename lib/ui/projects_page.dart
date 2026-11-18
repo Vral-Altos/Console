@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/models.dart';
 import '../data/providers.dart';
 import 'charts.dart';
-import 'theme.dart';
 import 'widgets.dart';
 
 /// Projects and their Devstations (GCE dev VMs with Claude Code and the
@@ -17,7 +16,6 @@ class ProjectsPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final text = Theme.of(context).textTheme;
-    final t = Tokens.of(context);
     ref.watch(clockProvider);
     final statuses = ref.watch(allStatusProvider).value ?? const {};
     final requests = ref.watch(factoryRequestsProvider).value ?? const <FactoryRequest>[];
@@ -35,21 +33,21 @@ class ProjectsPage extends ConsumerWidget {
           label: const Text('New Devstation'),
         ),
       ),
-      AsyncView(
+      VaAsyncView(
         value: ref.watch(devstationsProvider),
         data: (list) {
           if (list.isEmpty) {
-            return Panel(
+            return VaPanel(
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 24),
                 child: Column(children: [
-                  Icon(Icons.precision_manufacturing_outlined, size: 36, color: t.faint),
+                  Icon(Icons.precision_manufacturing_outlined, size: 36, color: VaColors.faint),
                   const SizedBox(height: 12),
                   Text('No Devstations yet', style: text.titleSmall),
                   const SizedBox(height: 4),
                   Text(
                     'Create one for a project to give its director a machine to work on.',
-                    style: text.bodySmall?.copyWith(color: t.muted),
+                    style: text.bodySmall?.copyWith(color: VaColors.muted),
                     textAlign: TextAlign.center,
                   ),
                 ]),
@@ -57,21 +55,21 @@ class ProjectsPage extends ConsumerWidget {
             );
           }
           final sorted = [...list]..sort((a, b) => '${a.project}/${a.id}'.compareTo('${b.project}/${b.id}'));
-          return ResponsiveGrid(minWidth: 330, maxColumns: 4, children: [
+          return VaResponsiveGrid(minWidth: 330, maxColumns: 4, children: [
             for (final d in sorted)
               DevstationCard(devstation: d, worker: statuses['devstation-${d.id}'], pending: pending[d.id]),
           ]);
         },
       ),
       const SizedBox(height: 8),
-      Panel(
+      VaPanel(
         title: 'Factory requests',
         subtitle: 'The last 30, newest first.',
         icon: Icons.history,
-        child: AsyncView(
+        child: VaAsyncView(
           value: ref.watch(factoryRequestsProvider),
           data: (list) => list.isEmpty
-              ? const EmptyNote('None yet.')
+              ? const VaEmptyNote('None yet.')
               : Column(children: [for (final r in list) FactoryRequestRow(request: r)]),
         ),
       ),
@@ -109,14 +107,13 @@ class PageTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    final t = Tokens.of(context);
     final narrow = MediaQuery.sizeOf(context).width < 600;
     final head = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text(title, style: text.headlineSmall?.copyWith(fontWeight: FontWeight.w600, letterSpacing: -.4)),
       if (subtitle != null)
         Padding(
           padding: const EdgeInsets.only(top: 4),
-          child: Text(subtitle!, style: text.bodyMedium?.copyWith(color: t.muted)),
+          child: Text(subtitle!, style: text.bodyMedium?.copyWith(color: VaColors.muted)),
         ),
     ]);
     return Padding(
@@ -136,17 +133,16 @@ class PageTitle extends StatelessWidget {
 }
 
 (String, Color, bool) devstationState(BuildContext context, Devstation d, bool serving) {
-  final t = Tokens.of(context);
   return switch (d.state) {
-    'running' when serving => ('Running · director serving', t.ok, true),
-    'running' => ('Running · director starting', t.info, true),
-    'stopped' => ('Stopped', t.faint, false),
-    'failed' => ('Failed', t.bad, false),
-    'provisioning' => ('Provisioning', t.info, true),
-    'starting' => ('Starting', t.info, true),
-    'stopping' => ('Stopping', t.warn, true),
-    'deleting' => ('Tearing down', t.warn, true),
-    _ => (d.state, t.faint, false),
+    'running' when serving => ('Running · director serving', VaColors.success, true),
+    'running' => ('Running · director starting', VaColors.info, true),
+    'stopped' => ('Stopped', VaColors.faint, false),
+    'failed' => ('Failed', VaColors.danger, false),
+    'provisioning' => ('Provisioning', VaColors.info, true),
+    'starting' => ('Starting', VaColors.info, true),
+    'stopping' => ('Stopping', VaColors.warning, true),
+    'deleting' => ('Tearing down', VaColors.warning, true),
+    _ => (d.state, VaColors.faint, false),
   };
 }
 
@@ -160,7 +156,6 @@ class DevstationCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final t = Tokens.of(context);
     final text = Theme.of(context).textTheme;
     final d = devstation;
     final serving = isFresh(worker, DateTime.now());
@@ -207,7 +202,7 @@ class DevstationCard extends ConsumerWidget {
                 actions: [
                   TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
                   FilledButton(
-                    style: FilledButton.styleFrom(backgroundColor: t.bad),
+                    style: FilledButton.styleFrom(backgroundColor: VaColors.danger),
                     onPressed: () => Navigator.pop(c, true),
                     child: const Text('Tear down'),
                   ),
@@ -216,7 +211,7 @@ class DevstationCard extends ConsumerWidget {
             );
             if (yes ?? false) await request('destroy');
           },
-          icon: Icon(Icons.delete_outline, color: t.muted),
+          icon: Icon(Icons.delete_outline, color: VaColors.muted),
         ),
       ],
       TextButton.icon(
@@ -237,7 +232,7 @@ class DevstationCard extends ConsumerWidget {
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Row(children: [
-            Icon(Icons.dns_outlined, size: 18, color: t.muted),
+            Icon(Icons.dns_outlined, size: 18, color: VaColors.muted),
             const SizedBox(width: 8),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -247,10 +242,10 @@ class DevstationCard extends ConsumerWidget {
             ),
           ]),
           const SizedBox(height: 10),
-          Align(alignment: Alignment.centerLeft, child: StatusPill(label: label, color: color, pulse: pulse, dense: true)),
+          Align(alignment: Alignment.centerLeft, child: VaStatusPill(label: label, color: color, pulse: pulse, dense: true)),
           if (d.error != null && d.error!.isNotEmpty) ...[
             const SizedBox(height: 8),
-            Text(d.error!, style: text.bodySmall?.copyWith(color: t.bad), maxLines: 3, overflow: TextOverflow.ellipsis),
+            Text(d.error!, style: text.bodySmall?.copyWith(color: VaColors.danger), maxLines: 3, overflow: TextOverflow.ellipsis),
           ],
           if (!compact) ...[
             const SizedBox(height: 12),
@@ -259,14 +254,14 @@ class DevstationCard extends ConsumerWidget {
               _MiniMeter(label: 'Memory', value: memFrac, detail: '${bytes(m.memUsed)} / ${bytes(m.memTotal)}'),
               if ((worker?.history.length ?? 0) >= 2) ...[
                 const SizedBox(height: 6),
-                Sparkline(values: [for (final p in worker!.history) p.cpu], max: 1, height: 26, color: t.series[0]),
+                Sparkline(values: [for (final p in worker!.history) p.cpu], max: 1, height: 26, color: VaColors.series[0]),
               ],
               const SizedBox(height: 8),
             ],
-            if (d.repoUrl?.isNotEmpty ?? false) KeyValue('Repository', d.repoUrl!, mono: true),
-            if (d.identity != null) KeyValue('Runs as', d.identity!.split('@').first, mono: true),
-            if (worker?.claudeVersion != null) KeyValue('Claude Code', worker!.claudeVersion!.split(' ').first),
-            if (d.createdAt != null) KeyValue('Created', ago(d.createdAt)),
+            if (d.repoUrl?.isNotEmpty ?? false) VaKeyValue('Repository', d.repoUrl!, mono: true),
+            if (d.identity != null) VaKeyValue('Runs as', d.identity!.split('@').first, mono: true),
+            if (worker?.claudeVersion != null) VaKeyValue('Claude Code', worker!.claudeVersion!.split(' ').first),
+            if (d.createdAt != null) VaKeyValue('Created', ago(d.createdAt)),
           ],
           const SizedBox(height: 12),
           controls,
@@ -294,7 +289,7 @@ class _MiniMeter extends StatelessWidget {
           Text('${pct(value)} · $detail', style: text.labelSmall),
         ]),
         const SizedBox(height: 4),
-        Meter(value: value),
+        VaMeter(value: value),
       ]),
     );
   }
@@ -306,14 +301,13 @@ class FactoryRequestRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Tokens.of(context);
     final text = Theme.of(context).textTheme;
     final r = request;
     final (IconData icon, Color color) = switch (r.status) {
-      'done' => (Icons.check_circle, t.ok),
-      'failed' => (Icons.error, t.bad),
-      'running' => (Icons.sync, t.info),
-      _ => (Icons.schedule, t.faint),
+      'done' => (Icons.check_circle, VaColors.success),
+      'failed' => (Icons.error, VaColors.danger),
+      'running' => (Icons.sync, VaColors.info),
+      _ => (Icons.schedule, VaColors.faint),
     };
     final took = r.createdAt != null && r.finishedAt != null ? ' · took ${duration(r.finishedAt!.difference(r.createdAt!))}' : '';
     return Padding(
@@ -326,7 +320,7 @@ class FactoryRequestRow extends StatelessWidget {
             Text('${r.action[0].toUpperCase()}${r.action.substring(1)} ${r.devstationId}${r.project == null ? '' : ' (${r.project})'}',
                 style: text.bodyMedium?.copyWith(fontWeight: FontWeight.w500)),
             Text('${r.status} · ${ago(r.createdAt)}$took', style: text.labelSmall),
-            if (r.error != null) Text(r.error!, style: text.bodySmall?.copyWith(color: t.bad)),
+            if (r.error != null) Text(r.error!, style: text.bodySmall?.copyWith(color: VaColors.danger)),
           ]),
         ),
       ]),

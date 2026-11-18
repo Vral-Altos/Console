@@ -2,10 +2,10 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:va_console/data/models.dart';
-import 'package:va_console/ui/theme.dart';
 import 'package:va_console/ui/topology/graph.dart';
 import 'package:va_console/ui/topology/layout.dart';
 import 'package:va_console/ui/topology/topology_page.dart';
+import 'package:ui_mesh/ui_mesh.dart';
 
 final now = DateTime.now();
 
@@ -180,7 +180,7 @@ void main() {
   });
 
   Widget host(Widget child) => MaterialApp(
-    theme: consoleTheme(Brightness.dark, fonts: false),
+    theme: vaTheme(),
     home: Scaffold(body: child),
   );
 

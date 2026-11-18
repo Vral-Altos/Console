@@ -1,26 +1,21 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:ui_mesh/ui_mesh.dart';
 
 import '../data/firebase.dart';
 import '../data/providers.dart';
 import 'shell.dart';
-import 'theme.dart';
 import '../data/platform/standalone.dart';
 
 class ConsoleApp extends ConsumerWidget {
-  const ConsoleApp({super.key, this.fonts = true});
-
-  /// Load the Console's web fonts (tests use the platform's).
-  final bool fonts;
+  const ConsoleApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) => MaterialApp(
     title: 'Vral Altos Console',
     debugShowCheckedModeBanner: false,
-    theme: consoleTheme(Brightness.light, fonts: fonts),
-    darkTheme: consoleTheme(Brightness.dark, fonts: fonts),
-    themeMode: ref.watch(themeModeProvider),
+    theme: vaTheme(),
     home: const AuthGate(),
   );
 }
@@ -115,7 +110,6 @@ class _Notice extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final t = Theme.of(context).extension<Tokens>();
     return Scaffold(
       body: Center(
         child: ConstrainedBox(
@@ -135,12 +129,12 @@ class _Notice extends StatelessWidget {
                         color: scheme.primary.withValues(alpha: .12),
                         borderRadius: BorderRadius.circular(16),
                       ),
-                      child: Icon(icon, size: 28, color: scheme.primary),
+                      child: Icon(icon, size: 28, color: VaColors.accentText),
                     ),
                     const SizedBox(height: 18),
                     Text(title, style: Theme.of(context).textTheme.titleLarge, textAlign: TextAlign.center),
                     const SizedBox(height: 8),
-                    Text(body, textAlign: TextAlign.center, style: TextStyle(color: t?.muted)),
+                    Text(body, textAlign: TextAlign.center, style: TextStyle(color: VaColors.muted)),
                     if (action != null) ...[const SizedBox(height: 22), action!],
                   ],
                 ),

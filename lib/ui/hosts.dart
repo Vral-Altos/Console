@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:ui_mesh/ui_mesh.dart';
 
 import '../data/models.dart';
 import '../data/providers.dart';
 import 'charts.dart';
-import 'theme.dart';
 import 'widgets.dart';
 
 /// Which kind of host a `status/<id>` document is.
@@ -36,7 +36,6 @@ class HostCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final t = Tokens.of(context);
     final text = Theme.of(context).textTheme;
     ref.watch(clockProvider);
     final now = DateTime.now();
@@ -44,13 +43,13 @@ class HostCard extends ConsumerWidget {
     final kind = hostKind(id);
     final fresh = isFresh(s, now);
     final (String label, Color color, bool pulse) = switch (kind) {
-      _ when s == null => ('Never seen', t.faint, false),
+      _ when s == null => ('Never seen', VaColors.faint, false),
       HostKind.cloud => (
         s.lastRunAt != null && now.difference(s.lastRunAt!) < const Duration(minutes: 15) ? 'Recently active' : 'Scaled to zero',
-        s.lastRunAt != null && now.difference(s.lastRunAt!) < const Duration(minutes: 15) ? t.info : t.faint,
+        s.lastRunAt != null && now.difference(s.lastRunAt!) < const Duration(minutes: 15) ? VaColors.info : VaColors.faint,
         false,
       ),
-      _ => fresh ? ('Serving', t.ok, true) : ('Away', t.warn, false),
+      _ => fresh ? ('Serving', VaColors.success, true) : ('Away', VaColors.warning, false),
     };
     final m = s?.metrics;
     final memFrac = m?.memUsed != null && (m?.memTotal ?? 0) > 0 ? m!.memUsed! / m.memTotal! : null;
@@ -71,17 +70,17 @@ class HostCard extends ConsumerWidget {
           children: [
             Row(
               children: [
-                Icon(hostIcon(id), size: 18, color: t.muted),
+                Icon(hostIcon(id), size: 18, color: VaColors.muted),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(hostTitle(id), style: text.titleSmall, overflow: TextOverflow.ellipsis),
                 ),
-                StatusPill(label: label, color: color, pulse: pulse, dense: true),
+                VaStatusPill(label: label, color: color, pulse: pulse, dense: true),
               ],
             ),
             const SizedBox(height: 14),
             if (m == null)
-              EmptyNote(
+              VaEmptyNote(
                 s == null ? 'This host has not reported yet.' : 'No load reading yet (it reports with its next heartbeat).',
                 icon: Icons.monitor_heart_outlined,
               )
@@ -125,11 +124,11 @@ class HostCard extends ConsumerWidget {
                 Row(
                   children: [
                     Expanded(
-                      child: _Trend(label: 'CPU', values: [for (final p in s.history) p.cpu], color: t.series[0]),
+                      child: _Trend(label: 'CPU', values: [for (final p in s.history) p.cpu], color: VaColors.series[0]),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: _Trend(label: 'Memory', values: [for (final p in s.history) p.mem], color: t.series[1]),
+                      child: _Trend(label: 'Memory', values: [for (final p in s.history) p.mem], color: VaColors.series[1]),
                     ),
                   ],
                 ),
@@ -146,7 +145,7 @@ class HostCard extends ConsumerWidget {
             ],
             if (footer.isNotEmpty) ...[
               const SizedBox(height: 10),
-              Divider(color: t.border),
+              Divider(color: VaColors.border),
               const SizedBox(height: 8),
               Text(footer.join(' · '), style: text.labelSmall, maxLines: 2, overflow: TextOverflow.ellipsis),
             ],

@@ -20,14 +20,12 @@ import 'package:va_console/ui/logs_page.dart';
 import 'package:va_console/ui/overview_page.dart';
 import 'package:va_console/ui/projects_page.dart';
 import 'package:va_console/ui/system_page.dart';
-import 'package:va_console/ui/theme.dart';
+import 'package:ui_mesh/ui_mesh.dart';
 
-Widget host(Widget child, List overrides, {ThemeMode mode = ThemeMode.light}) => ProviderScope(
+Widget host(Widget child, List overrides) => ProviderScope(
   overrides: [...overrides],
   child: MaterialApp(
-    theme: consoleTheme(Brightness.light, fonts: false),
-    darkTheme: consoleTheme(Brightness.dark, fonts: false),
-    themeMode: mode,
+    theme: vaTheme(),
     home: Scaffold(body: child),
   ),
 );
@@ -153,7 +151,7 @@ class MemoryStore implements AttachmentStore {
 
 void main() {
   testWidgets('without Firebase configured the app says so', (tester) async {
-    await tester.pumpWidget(const ProviderScope(child: ConsoleApp(fonts: false)));
+    await tester.pumpWidget(const ProviderScope(child: ConsoleApp()));
     await tester.pump();
     expect(find.text('No Firebase configured'), findsOneWidget);
   });
@@ -341,7 +339,7 @@ void main() {
   testWidgets('code is coloured for known languages and plain otherwise', (tester) async {
     late TextSpan dart, plain, unknown;
     await tester.pumpWidget(MaterialApp(
-      theme: consoleTheme(Brightness.light, fonts: false),
+      theme: vaTheme(),
       home: Builder(builder: (context) {
         dart = highlightCode(context, 'final x = "a"; // note', 'dart', const TextStyle());
         plain = highlightCode(context, 'final x', null, const TextStyle());
@@ -502,8 +500,8 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  for (final mode in [ThemeMode.light, ThemeMode.dark]) {
-    testWidgets('every page fits a phone ($mode)', (tester) async {
+  {
+    testWidgets('every page fits a phone', (tester) async {
       size(tester, const Size(390, 844));
       final o = overridesWith(
         threads: const [ChatThread(id: 't1', agent: 'genie', title: 'A rather long conversation title that must ellipsize')],
@@ -523,7 +521,7 @@ void main() {
                 ChatMessage(id: '1', threadId: 't1', fromOperator: true, text: 'hello', status: MessageStatus.done, createdAt: now),
                 ChatMessage(id: '2', threadId: 't1', fromOperator: false, text: '| a | b |\n|---|---|\n| 1 | 2 |\n\n```dart\nfinal x = 1;\n```', createdAt: now),
               ])),
-        ], mode: mode));
+        ]));
         await tester.pump();
         expect(tester.takeException(), isNull, reason: '${page.runtimeType}');
       }

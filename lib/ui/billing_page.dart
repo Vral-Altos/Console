@@ -8,7 +8,6 @@ import '../data/providers.dart';
 import 'charts.dart';
 import 'overview_page.dart' show StatTile;
 import 'projects_page.dart' show PageScroll, PageTitle;
-import 'theme.dart';
 import 'widgets.dart';
 
 /// The month's target spend (S$), as on the Overview.
@@ -38,7 +37,7 @@ class _BillingPageState extends ConsumerState<BillingPage> {
         subtitle: 'What every GCP project on the billing account costs, from the Cloud Billing export. '
             'Google updates it a few times a day; amounts are net of credits.',
       ),
-      AsyncView(
+      VaAsyncView(
         value: ref.watch(billingBreakdownProvider),
         data: (b) => b == null || b.status != 'ok'
             ? _Setup(breakdown: b)
@@ -60,7 +59,6 @@ class _Setup extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final t = Tokens.of(context);
     final text = Theme.of(context).textTheme;
     final budget = ref.watch(billingProvider).value;
     final waiting = breakdown?.status == 'empty';
@@ -72,7 +70,7 @@ class _Setup extends ConsumerWidget {
           width: 22,
           height: 22,
           alignment: Alignment.center,
-          decoration: BoxDecoration(color: t.sunken, shape: BoxShape.circle, border: Border.all(color: t.border)),
+          decoration: BoxDecoration(color: VaColors.sunken, shape: BoxShape.circle, border: Border.all(color: VaColors.border)),
           child: Text('$n', style: text.labelSmall?.copyWith(fontWeight: FontWeight.w600)),
         ),
         const SizedBox(width: 10),
@@ -80,14 +78,14 @@ class _Setup extends ConsumerWidget {
       ]),
     );
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Panel(
+      VaPanel(
         title: waiting ? 'Waiting for the first export' : 'Switch on the billing export',
         subtitle: waiting
             ? 'The export is on. Google’s first load backfills from the start of last month and can take up to five days.'
             : 'Breakdowns come from Cloud Billing’s BigQuery export. Google only allows switching it on in the Cloud Console; the dataset and access are ready.',
         icon: waiting ? Icons.hourglass_top : Icons.toggle_on_outlined,
         child: waiting
-            ? EmptyNote('Last checked ${ago(breakdown?.at)} in $dataset (${breakdown?.table ?? 'no table'}).', icon: Icons.schedule)
+            ? VaEmptyNote('Last checked ${ago(breakdown?.at)} in $dataset (${breakdown?.table ?? 'no table'}).', icon: Icons.schedule)
             : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                 step(1, 'Cloud Console → Billing → Billing export → BigQuery export.'),
                 step(2, 'Standard usage cost → Edit settings: project vral-altos, dataset va_billing → Save.'),
@@ -97,7 +95,7 @@ class _Setup extends ConsumerWidget {
               ]),
       ),
       const SizedBox(height: 14),
-      ResponsiveGrid(minWidth: 220, maxColumns: 3, children: [
+      VaResponsiveGrid(minWidth: 220, maxColumns: 3, children: [
         StatTile(
           label: 'GCP spend this month',
           icon: Icons.cloud_outlined,
@@ -105,7 +103,7 @@ class _Setup extends ConsumerWidget {
           sub: budget == null
               ? 'Waiting for the budget’s first report'
               : 'From the budget (total only) · ${ago(budget.updatedAt)}',
-          child: budget == null ? null : Meter(value: budget.costAmount / spendTarget, warnAt: .66, badAt: 1),
+          child: budget == null ? null : VaMeter(value: budget.costAmount / spendTarget, warnAt: .66, badAt: 1),
         ),
       ]),
     ]);
@@ -125,7 +123,6 @@ class BillingBreakdownView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final b = breakdown;
-    final t = Tokens.of(context);
     final cur = b.currency;
     final at = now ?? DateTime.now();
 
@@ -139,7 +136,7 @@ class BillingBreakdownView extends StatelessWidget {
     // Colours: the five costliest projects, the rest together.
     final ranked = [for (final x in b.projects) if (x.net > 0 || x.previous > 0) x];
     final top = ranked.take(5).map((x) => x.id).toList();
-    Color colorOf(String id) => top.contains(id) ? t.series[top.indexOf(id) % t.series.length] : t.faint;
+    Color colorOf(String id) => top.contains(id) ? VaColors.series[top.indexOf(id) % VaColors.series.length] : VaColors.faint;
     final names = {for (final x in b.projects) x.id: x.name, '~account': 'Billing account'};
     String nameOf(String id) => names[id] ?? (id.isEmpty ? 'Billing account' : id);
 
@@ -152,12 +149,12 @@ class BillingBreakdownView extends StatelessWidget {
     final change = b.previousTotal <= 0 ? null : b.total / b.previousTotal;
 
     final daily = _DailyChart(breakdown: b, top: top, colorOf: colorOf, nameOf: nameOf, now: at);
-    final byProject = Panel(
+    final byProject = VaPanel(
       title: 'By project',
       subtitle: selected == null ? 'This month and last. Select one to narrow services and SKUs.' : 'Showing ${nameOf(selected)} below. Select again for all.',
       icon: Icons.folder_outlined,
       child: ranked.isEmpty
-          ? const EmptyNote('Nothing billed this month or last.')
+          ? const VaEmptyNote('Nothing billed this month or last.')
           : Column(children: [
               for (final x in ranked)
                 _ProjectRow(
@@ -170,12 +167,12 @@ class BillingBreakdownView extends StatelessWidget {
                 ),
             ]),
     );
-    final byService = Panel(
+    final byService = VaPanel(
       title: 'By service',
       subtitle: selected == null ? 'This month (last month)' : nameOf(selected),
       icon: Icons.category_outlined,
       child: services.isEmpty
-          ? const EmptyNote('Nothing billed.')
+          ? const VaEmptyNote('Nothing billed.')
           : Column(children: [
               for (final s in services.take(12))
                 _AmountRow(
@@ -198,7 +195,7 @@ class BillingBreakdownView extends StatelessWidget {
             ])
           : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [a, const SizedBox(height: 14), b2]);
       return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        ResponsiveGrid(minWidth: 160, maxColumns: 4, children: [
+        VaResponsiveGrid(minWidth: 160, maxColumns: 4, children: [
           StatTile(
             label: 'This month',
             icon: Icons.payments_outlined,
@@ -208,10 +205,10 @@ class BillingBreakdownView extends StatelessWidget {
           StatTile(
             label: 'At this pace',
             icon: Icons.trending_up,
-            accent: projected != null && projected > spendTarget ? t.warn : null,
+            accent: projected != null && projected > spendTarget ? VaColors.warning : null,
             value: projected == null ? '—' : money(projected, cur),
             sub: projected == null ? 'Too early in the month to tell' : 'Projected for ${_monthName(b.month)} · target S\$${spendTarget.toStringAsFixed(0)}',
-            child: projected == null ? null : Meter(value: projected / spendTarget, warnAt: .66, badAt: 1),
+            child: projected == null ? null : VaMeter(value: projected / spendTarget, warnAt: .66, badAt: 1),
           ),
           StatTile(
             label: 'Last month',
@@ -231,12 +228,12 @@ class BillingBreakdownView extends StatelessWidget {
         const SizedBox(height: 14),
         pair(byProject, byService),
         const SizedBox(height: 14),
-        Panel(
+        VaPanel(
           title: 'Top SKUs',
           subtitle: selected == null ? 'The month’s largest line items' : 'The month’s largest line items in ${nameOf(selected)}',
           icon: Icons.receipt_long_outlined,
           child: skus.isEmpty
-              ? const EmptyNote('No line items.')
+              ? const VaEmptyNote('No line items.')
               : Column(children: [
                   for (final k in skus.take(12))
                     _AmountRow(
@@ -278,7 +275,6 @@ class _DailyChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Tokens.of(context);
     // Operator days (Singapore, UTC+8), oldest first.
     final today = now.toUtc().add(const Duration(hours: 8));
     final first = DateTime.utc(today.year, today.month, today.day).subtract(const Duration(days: days - 1));
@@ -288,15 +284,15 @@ class _DailyChart extends StatelessWidget {
     final series = <Series>[
       for (final id in top) (name: nameOf(id), color: colorOf(id), values: [for (final d in keys) math.max(0, v(d, (k) => k == id))]),
       if (breakdown.days.values.any((m) => m.keys.any((k) => !top.contains(k))))
-        (name: 'Other', color: t.faint, values: [for (final d in keys) math.max(0, v(d, (k) => !top.contains(k)))]),
+        (name: 'Other', color: VaColors.faint, values: [for (final d in keys) math.max(0, v(d, (k) => !top.contains(k)))]),
     ];
     final any = series.any((s) => s.values.any((x) => (x ?? 0) > 0));
-    return Panel(
+    return VaPanel(
       title: 'Daily cost',
       subtitle: 'The last $days days by project (your days, Singapore time). Hover a day for its split.',
       icon: Icons.bar_chart,
       child: !any
-          ? const EmptyNote('No billed days in the last month.')
+          ? const VaEmptyNote('No billed days in the last month.')
           : TimeChart(
               series: series,
               // Singapore midnight of the first day.
@@ -328,7 +324,6 @@ class _ProjectRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Tokens.of(context);
     final text = Theme.of(context).textTheme;
     final scheme = Theme.of(context).colorScheme;
     final x = project;
@@ -361,25 +356,25 @@ class _ProjectRow extends StatelessWidget {
                 ),
               ),
               if (x.id.isNotEmpty && x.id != x.name) ...[
-                Flexible(child: Text(x.id, overflow: TextOverflow.ellipsis, style: text.labelSmall?.copyWith(color: t.faint))),
+                Flexible(child: Text(x.id, overflow: TextOverflow.ellipsis, style: text.labelSmall?.copyWith(color: VaColors.faint))),
                 const SizedBox(width: 10),
               ],
-              Text(money(x.net, currency), style: text.bodyMedium?.copyWith(fontFamily: t.mono, fontWeight: FontWeight.w600)),
+              Text(money(x.net, currency), style: text.bodyMedium?.copyWith(fontFamily: VaType.mono, fontWeight: FontWeight.w600)),
               SizedBox(
                 width: 84,
                 child: Text(
                   money(x.previous, currency),
                   textAlign: TextAlign.right,
-                  style: text.labelSmall?.copyWith(fontFamily: t.mono, color: t.muted),
+                  style: text.labelSmall?.copyWith(fontFamily: VaType.mono, color: VaColors.muted),
                 ),
               ),
             ]),
             const SizedBox(height: 6),
             Stack(children: [
-              Container(height: 4, decoration: BoxDecoration(color: t.sunken, borderRadius: BorderRadius.circular(2))),
+              Container(height: 4, decoration: BoxDecoration(color: VaColors.sunken, borderRadius: BorderRadius.circular(2))),
               FractionallySizedBox(
                 widthFactor: f(x.previous),
-                child: Container(height: 4, decoration: BoxDecoration(color: t.border, borderRadius: BorderRadius.circular(2))),
+                child: Container(height: 4, decoration: BoxDecoration(color: VaColors.border, borderRadius: BorderRadius.circular(2))),
               ),
               FractionallySizedBox(
                 widthFactor: f(x.net),
@@ -409,7 +404,6 @@ class _AmountRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Tokens.of(context);
     final text = Theme.of(context).textTheme;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
@@ -418,20 +412,20 @@ class _AmountRow extends StatelessWidget {
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(label, style: text.bodyMedium, overflow: TextOverflow.ellipsis, maxLines: 2),
-              if (detail != null) Text(detail!, style: text.labelSmall?.copyWith(color: t.muted), overflow: TextOverflow.ellipsis),
+              if (detail != null) Text(detail!, style: text.labelSmall?.copyWith(color: VaColors.muted), overflow: TextOverflow.ellipsis),
             ]),
           ),
           const SizedBox(width: 10),
-          Text(amount, style: text.bodyMedium?.copyWith(fontFamily: t.mono, fontWeight: FontWeight.w600)),
+          Text(amount, style: text.bodyMedium?.copyWith(fontFamily: VaType.mono, fontWeight: FontWeight.w600)),
           if (aside != null)
             SizedBox(
               width: 76,
-              child: Text(aside!, textAlign: TextAlign.right, style: text.labelSmall?.copyWith(fontFamily: t.mono, color: t.muted)),
+              child: Text(aside!, textAlign: TextAlign.right, style: text.labelSmall?.copyWith(fontFamily: VaType.mono, color: VaColors.muted)),
             ),
         ]),
         const SizedBox(height: 5),
         Stack(children: [
-          Container(height: 3, decoration: BoxDecoration(color: t.sunken, borderRadius: BorderRadius.circular(2))),
+          Container(height: 3, decoration: BoxDecoration(color: VaColors.sunken, borderRadius: BorderRadius.circular(2))),
           FractionallySizedBox(
             widthFactor: fraction,
             child: Container(height: 3, decoration: BoxDecoration(color: color.withValues(alpha: .8), borderRadius: BorderRadius.circular(2))),

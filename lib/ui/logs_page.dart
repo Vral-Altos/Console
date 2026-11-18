@@ -8,7 +8,6 @@ import '../data/models.dart';
 import '../data/providers.dart';
 import '../data/telemetry.dart';
 import 'charts.dart';
-import 'theme.dart';
 import 'widgets.dart';
 
 /// Every service's logs and metrics, and the operator's own trail, like
@@ -57,7 +56,6 @@ class _LogsPageState extends ConsumerState<LogsPage> with SingleTickerProviderSt
 
   @override
   Widget build(BuildContext context) {
-    final t = Tokens.of(context);
     final text = Theme.of(context).textTheme;
     final narrow = MediaQuery.sizeOf(context).width < 600;
     final from = _now.subtract(_range.span);
@@ -73,7 +71,7 @@ class _LogsPageState extends ConsumerState<LogsPage> with SingleTickerProviderSt
               Text('Logs & monitoring', style: text.headlineSmall?.copyWith(fontWeight: FontWeight.w600, letterSpacing: -.4)),
               const SizedBox(height: 4),
               Text('Every service’s logs and metrics, and what you did in the Console.',
-                  style: text.bodyMedium?.copyWith(color: t.muted)),
+                  style: text.bodyMedium?.copyWith(color: VaColors.muted)),
             ]),
             Row(mainAxisSize: MainAxisSize.min, children: [
               _RangeMenu(value: _range, onChanged: (r) => setState(() {
@@ -90,7 +88,7 @@ class _LogsPageState extends ConsumerState<LogsPage> with SingleTickerProviderSt
           controller: _tabs,
           isScrollable: true,
           tabAlignment: TabAlignment.start,
-          dividerColor: t.border,
+          dividerColor: VaColors.border,
           tabs: const [
             Tab(icon: Icon(Icons.receipt_long_outlined, size: 18), text: 'Logs Explorer', iconMargin: EdgeInsets.zero),
             Tab(icon: Icon(Icons.monitor_heart_outlined, size: 18), text: 'Monitoring', iconMargin: EdgeInsets.zero),
@@ -126,9 +124,9 @@ class _RangeMenu extends StatelessWidget {
     child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        border: Border.all(color: Tokens.of(context).border),
+        border: Border.all(color: VaColors.border),
         borderRadius: BorderRadius.circular(10),
-        color: Tokens.of(context).panel,
+        color: VaColors.panel,
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         const Icon(Icons.schedule, size: 16),
@@ -143,12 +141,11 @@ class _RangeMenu extends StatelessWidget {
 String bucketLabel(Duration d) => d.inHours >= 1 ? '${d.inHours} h' : '${d.inMinutes} min';
 
 Color severityColor(BuildContext context, LogSeverity s) {
-  final t = Tokens.of(context);
   return switch (s) {
-    LogSeverity.error => t.bad,
-    LogSeverity.warning => t.warn,
-    LogSeverity.info => t.info,
-    LogSeverity.debug => t.faint,
+    LogSeverity.error => VaColors.danger,
+    LogSeverity.warning => VaColors.warning,
+    LogSeverity.info => VaColors.info,
+    LogSeverity.debug => VaColors.faint,
   };
 }
 
@@ -199,7 +196,6 @@ class _LogsExplorerState extends ConsumerState<LogsExplorer> with AutomaticKeepA
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final t = Tokens.of(context);
     final text = Theme.of(context).textTheme;
     final narrow = MediaQuery.sizeOf(context).width < 600;
     final pad = narrow ? 14.0 : 28.0;
@@ -223,7 +219,7 @@ class _LogsExplorerState extends ConsumerState<LogsExplorer> with AutomaticKeepA
             return hay.contains(_query);
           }).toList();
 
-    final histogram = Panel(
+    final histogram = VaPanel(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       child: TimeChart(
         from: widget.from,
@@ -232,9 +228,9 @@ class _LogsExplorerState extends ConsumerState<LogsExplorer> with AutomaticKeepA
         height: 90,
         series: [
           for (final (name, color, label) in [
-            ('log_info', t.info, 'Info'),
-            ('log_warning', t.warn, 'Warning'),
-            ('log_error', t.bad, 'Error'),
+            ('log_info', VaColors.info, 'Info'),
+            ('log_warning', VaColors.warning, 'Warning'),
+            ('log_error', VaColors.danger, 'Error'),
           ])
             if (_severities.any((s) => 'log_${s.name}' == name))
               (
@@ -254,7 +250,7 @@ class _LogsExplorerState extends ConsumerState<LogsExplorer> with AutomaticKeepA
           onChanged: (v) => setState(() => _query = v.trim().toLowerCase()),
           decoration: InputDecoration(
             hintText: 'Search messages and fields',
-            prefixIcon: Icon(Icons.search, size: 18, color: t.muted),
+            prefixIcon: Icon(Icons.search, size: 18, color: VaColors.muted),
             contentPadding: const EdgeInsets.symmetric(vertical: 10),
           ),
         ),
@@ -303,7 +299,7 @@ class _LogsExplorerState extends ConsumerState<LogsExplorer> with AutomaticKeepA
           histogram,
           const SizedBox(height: 12),
           Row(children: [
-            if (!_paused && value.hasValue) ...[StatusDot(color: t.ok, pulse: true), const SizedBox(width: 8)],
+            if (!_paused && value.hasValue) ...[VaStatusDot(color: VaColors.success, pulse: true), const SizedBox(width: 8)],
             Expanded(
               child: Text(
                 value.isLoading && !value.hasValue
@@ -316,7 +312,7 @@ class _LogsExplorerState extends ConsumerState<LogsExplorer> with AutomaticKeepA
               ),
             ),
           ]),
-          if (value.hasError) EmptyNote('Could not load logs: ${value.error}', icon: Icons.error_outline),
+          if (value.hasError) VaEmptyNote('Could not load logs: ${value.error}', icon: Icons.error_outline),
           const SizedBox(height: 6),
         ]),
       ),
@@ -324,7 +320,7 @@ class _LogsExplorerState extends ConsumerState<LogsExplorer> with AutomaticKeepA
         SliverPadding(
           padding: EdgeInsets.symmetric(horizontal: pad),
           sliver: const SliverToBoxAdapter(
-            child: Panel(child: EmptyNote('No log entries in this range and filter.', icon: Icons.receipt_long_outlined)),
+            child: VaPanel(child: VaEmptyNote('No log entries in this range and filter.', icon: Icons.receipt_long_outlined)),
           ),
         ),
       SliverPadding(
@@ -388,7 +384,6 @@ class LogRow extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final t = Tokens.of(context);
     final text = Theme.of(context).textTheme;
     final e = entry;
     final color = severityColor(context, e.severity);
@@ -398,17 +393,17 @@ class LogRow extends ConsumerWidget {
       top: first ? const Radius.circular(12) : Radius.zero,
       bottom: last ? const Radius.circular(12) : Radius.zero,
     );
-    final mono = text.bodySmall?.copyWith(fontFamily: t.mono, fontSize: 12);
+    final mono = text.bodySmall?.copyWith(fontFamily: VaType.mono, fontSize: 12);
     final sourceTag = Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-      decoration: BoxDecoration(color: t.sunken, borderRadius: BorderRadius.circular(5)),
+      decoration: BoxDecoration(color: VaColors.sunken, borderRadius: BorderRadius.circular(5)),
       child: Text(sourceLabel(e.source), style: text.labelSmall),
     );
     return Material(
-      color: open ? t.sunken.withValues(alpha: .6) : t.panel,
+      color: open ? VaColors.sunken.withValues(alpha: .6) : VaColors.panel,
       shape: RoundedRectangleBorder(
         borderRadius: radius,
-        side: BorderSide(color: t.border, width: .6),
+        side: BorderSide(color: VaColors.border, width: .6),
       ),
       child: InkWell(
         borderRadius: radius,
@@ -417,14 +412,14 @@ class LogRow extends ConsumerWidget {
           padding: const EdgeInsets.fromLTRB(10, 7, 10, 7),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Icon(open ? Icons.expand_more : Icons.chevron_right, size: 16, color: t.faint),
+              Icon(open ? Icons.expand_more : Icons.chevron_right, size: 16, color: VaColors.faint),
               const SizedBox(width: 4),
               Padding(padding: const EdgeInsets.only(top: 1), child: Icon(severityIcon(e.severity), size: 15, color: color)),
               const SizedBox(width: 8),
               if (!narrow) ...[
-                SizedBox(width: 160, child: Text(_stamp(e.at), style: mono?.copyWith(color: t.muted))),
+                SizedBox(width: 160, child: Text(_stamp(e.at), style: mono?.copyWith(color: VaColors.muted))),
                 SizedBox(width: 120, child: Align(alignment: Alignment.centerLeft, child: sourceTag)),
-                SizedBox(width: 90, child: Text(e.component, style: mono?.copyWith(color: t.muted), overflow: TextOverflow.ellipsis)),
+                SizedBox(width: 90, child: Text(e.component, style: mono?.copyWith(color: VaColors.muted), overflow: TextOverflow.ellipsis)),
               ],
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -432,7 +427,7 @@ class LogRow extends ConsumerWidget {
                     Padding(
                       padding: const EdgeInsets.only(bottom: 3),
                       child: Wrap(spacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
-                        Text(_stamp(e.at), style: mono?.copyWith(color: t.muted, fontSize: 11)),
+                        Text(_stamp(e.at), style: mono?.copyWith(color: VaColors.muted, fontSize: 12)),
                         sourceTag,
                         Text(e.component, style: text.labelSmall),
                       ]),
@@ -441,7 +436,7 @@ class LogRow extends ConsumerWidget {
                     e.message,
                     maxLines: open ? null : 1,
                     overflow: open ? null : TextOverflow.ellipsis,
-                    style: mono?.copyWith(color: e.severity == LogSeverity.error ? t.bad : null),
+                    style: mono?.copyWith(color: e.severity == LogSeverity.error ? VaColors.danger : null),
                   ),
                 ]),
               ),
@@ -450,13 +445,13 @@ class LogRow extends ConsumerWidget {
               Padding(
                 padding: const EdgeInsets.fromLTRB(28, 10, 4, 4),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                  KeyValue('Time', e.at.toLocal().toIso8601String(), mono: true),
-                  KeyValue('Severity', e.severity.name.toUpperCase()),
-                  KeyValue('Source', e.source),
-                  if (e.host != null) KeyValue('Host', e.host!, mono: true),
-                  KeyValue('Component', e.component),
+                  VaKeyValue('Time', e.at.toLocal().toIso8601String(), mono: true),
+                  VaKeyValue('Severity', e.severity.name.toUpperCase()),
+                  VaKeyValue('Source', e.source),
+                  if (e.host != null) VaKeyValue('Host', e.host!, mono: true),
+                  VaKeyValue('Component', e.component),
                   for (final f in e.fields.entries)
-                    KeyValue(f.key, f.value is DateTime ? (f.value as DateTime).toLocal().toIso8601String() : '${f.value}', mono: true),
+                    VaKeyValue(f.key, f.value is DateTime ? (f.value as DateTime).toLocal().toIso8601String() : '${f.value}', mono: true),
                   const SizedBox(height: 8),
                   Wrap(spacing: 8, children: [
                     OutlinedButton.icon(
@@ -515,7 +510,6 @@ class _MonitoringViewState extends ConsumerState<MonitoringView> with AutomaticK
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final t = Tokens.of(context);
     final narrow = MediaQuery.sizeOf(context).width < 600;
     final pad = narrow ? 14.0 : 28.0;
     final value = ref.watch(metricsProvider(hourOf(widget.from)));
@@ -531,7 +525,7 @@ class _MonitoringViewState extends ConsumerState<MonitoringView> with AutomaticK
         final ia = knownSources.indexOf(a), ic = knownSources.indexOf(c);
         return (ia < 0 ? 99 : ia).compareTo(ic < 0 ? 99 : ic);
       });
-    Color colorFor(String s) => t.series[sources.indexOf(s) % t.series.length];
+    Color colorFor(String s) => VaColors.series[sources.indexOf(s) % VaColors.series.length];
     final hostSources = sources.where((s) => hours.any((h) => h.source == s && h.minutes.values.any((m) => m.containsKey('cpu')))).toList();
 
     final turns = sum('turns');
@@ -545,21 +539,21 @@ class _MonitoringViewState extends ConsumerState<MonitoringView> with AutomaticK
     ];
 
     Widget chart(String title, String subtitle, List<Series> series, {bool stacked = false, double? max, String Function(double)? fmt}) =>
-        Panel(
+        VaPanel(
           title: title,
           subtitle: subtitle,
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
           child: series.isEmpty || series.every((s) => s.values.every((v) => v == null))
-              ? const Padding(padding: EdgeInsets.symmetric(vertical: 40), child: Center(child: EmptyNote('No data in this range.', icon: Icons.show_chart)))
+              ? const Padding(padding: EdgeInsets.symmetric(vertical: 40), child: Center(child: VaEmptyNote('No data in this range.', icon: Icons.show_chart)))
               : TimeChart(series: series, from: from, bucket: bucket, stacked: stacked, max: max, format: fmt),
         );
 
     String pctFmt(double v) => '${(v * 100).round()}%';
 
     return ListView(padding: EdgeInsets.fromLTRB(pad, 16, pad, 40), children: [
-      if (value.hasError) EmptyNote('Could not load metrics: ${value.error}', icon: Icons.error_outline),
+      if (value.hasError) VaEmptyNote('Could not load metrics: ${value.error}', icon: Icons.error_outline),
       if (!value.hasValue && !value.hasError) const LinearProgressIndicator(minHeight: 2),
-      ResponsiveGrid(minWidth: 150, maxColumns: 6, gap: 10, children: [
+      VaResponsiveGrid(minWidth: 150, maxColumns: 6, gap: 10, children: [
         _Kpi('Chat turns', compact(turns.round())),
         _Kpi('Failed', '${failed.round()}', bad: failed > 0),
         _Kpi('Avg. turn', turns == 0 ? '—' : duration(Duration(milliseconds: turnMs ~/ turns))),
@@ -568,19 +562,19 @@ class _MonitoringViewState extends ConsumerState<MonitoringView> with AutomaticK
         _Kpi('Runner wake-ups', '${sum('http_requests', source: 'cloud-runner').round()}'),
       ]),
       const SizedBox(height: 14),
-      ResponsiveGrid(minWidth: 420, maxColumns: 3, children: [
+      VaResponsiveGrid(minWidth: 420, maxColumns: 3, children: [
         chart('Chat turns', 'Done, failed and stopped, per ${bucketLabel(bucket)}', [
-          (name: 'Done', color: t.series[0], values: b('turns')),
-          (name: 'Failed', color: t.bad, values: b('turns_failed')),
-          (name: 'Stopped', color: t.warn, values: b('turns_cancelled')),
+          (name: 'Done', color: VaColors.series[0], values: b('turns')),
+          (name: 'Failed', color: VaColors.danger, values: b('turns_failed')),
+          (name: 'Stopped', color: VaColors.warning, values: b('turns_cancelled')),
         ], stacked: true),
         chart('Turn latency', 'Average seconds per turn', [
-          (name: 'Avg. turn (s)', color: t.series[1], values: avgLatency),
+          (name: 'Avg. turn (s)', color: VaColors.series[1], values: avgLatency),
         ]),
         chart('Log volume', 'Entries by severity, all services', [
-          (name: 'Info', color: t.info, values: b('log_info')),
-          (name: 'Warning', color: t.warn, values: b('log_warning')),
-          (name: 'Error', color: t.bad, values: b('log_error')),
+          (name: 'Info', color: VaColors.info, values: b('log_info')),
+          (name: 'Warning', color: VaColors.warning, values: b('log_warning')),
+          (name: 'Error', color: VaColors.danger, values: b('log_error')),
         ], stacked: true),
         chart('Errors by source', 'Error entries per service', [
           for (final s in sources)
@@ -593,27 +587,27 @@ class _MonitoringViewState extends ConsumerState<MonitoringView> with AutomaticK
           for (final s in hostSources) (name: sourceLabel(s), color: colorFor(s), values: b('mem', source: s, gauge: true)),
         ], max: 1, fmt: pctFmt),
         chart('Claude cost', 'API-equivalent USD', [
-          (name: 'Cost', color: t.series[2], values: b('cost_usd')),
+          (name: 'Cost', color: VaColors.series[2], values: b('cost_usd')),
         ], stacked: true, fmt: (v) => usd(v)),
         chart('Output tokens', 'Tokens written by agents', [
-          (name: 'Tokens', color: t.series[1], values: b('tokens_out')),
+          (name: 'Tokens', color: VaColors.series[1], values: b('tokens_out')),
         ], stacked: true, fmt: (v) => compact(v.round())),
         chart('Cloud runner', 'Wake-ups (Eventarc, sweep, billing)', [
-          (name: 'Requests', color: t.series[0], values: b('http_requests', source: 'cloud-runner')),
+          (name: 'Requests', color: VaColors.series[0], values: b('http_requests', source: 'cloud-runner')),
         ], stacked: true),
         chart('Factory', 'Builds and failures', [
-          (name: 'Builds', color: t.ok, values: b('factory_builds')),
-          (name: 'Failed', color: t.bad, values: b('factory_failed')),
+          (name: 'Builds', color: VaColors.success, values: b('factory_builds')),
+          (name: 'Failed', color: VaColors.danger, values: b('factory_failed')),
         ], stacked: true),
         chart('Tools', 'Consults, Financier tool calls, Autobench syncs', [
-          (name: 'Consults', color: t.series[0], values: b('consults')),
-          (name: 'Financier', color: t.series[1], values: b('tool_calls')),
-          (name: 'Autobench syncs', color: t.series[2], values: b('syncs')),
+          (name: 'Consults', color: VaColors.series[0], values: b('consults')),
+          (name: 'Financier', color: VaColors.series[1], values: b('tool_calls')),
+          (name: 'Autobench syncs', color: VaColors.series[2], values: b('syncs')),
         ], stacked: true),
         chart('Sessions', 'Compactions, hand-offs, usage limits', [
-          (name: 'Compactions', color: t.series[1], values: b('compactions')),
-          (name: 'Hand-offs', color: t.series[3], values: b('handoffs')),
-          (name: 'Usage limited', color: t.warn, values: b('usage_limited')),
+          (name: 'Compactions', color: VaColors.series[1], values: b('compactions')),
+          (name: 'Hand-offs', color: VaColors.series[3], values: b('handoffs')),
+          (name: 'Usage limited', color: VaColors.warning, values: b('usage_limited')),
         ], stacked: true),
       ]),
     ]);
@@ -628,7 +622,6 @@ class _Kpi extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Tokens.of(context);
     final text = Theme.of(context).textTheme;
     return Card(
       child: Padding(
@@ -636,7 +629,7 @@ class _Kpi extends StatelessWidget {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(label, style: text.labelSmall),
           const SizedBox(height: 4),
-          Text(value, style: text.titleLarge?.copyWith(fontFamily: t.mono, color: bad ? t.bad : null)),
+          Text(value, style: text.titleLarge?.copyWith(fontFamily: VaType.mono, color: bad ? VaColors.danger : null)),
         ]),
       ),
     );
@@ -670,7 +663,6 @@ class _ActivityViewState extends ConsumerState<ActivityView> with AutomaticKeepA
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final t = Tokens.of(context);
     final text = Theme.of(context).textTheme;
     final narrow = MediaQuery.sizeOf(context).width < 600;
     final pad = narrow ? 14.0 : 28.0;
@@ -697,10 +689,10 @@ class _ActivityViewState extends ConsumerState<ActivityView> with AutomaticKeepA
         ));
       }
       final (IconData icon, Color color) = switch (e.component) {
-        'audit' => (Icons.person_outline, Theme.of(context).colorScheme.primary),
-        'factory' => (Icons.precision_manufacturing_outlined, t.series[1]),
-        'billing' => (Icons.payments_outlined, t.series[2]),
-        _ => (Icons.power_settings_new, t.muted),
+        'audit' => (Icons.person_outline, VaColors.accentText),
+        'factory' => (Icons.precision_manufacturing_outlined, VaColors.series[1]),
+        'billing' => (Icons.payments_outlined, VaColors.series[2]),
+        _ => (Icons.power_settings_new, VaColors.muted),
       };
       final open = _open.contains(e.id);
       items.add(InkWell(
@@ -713,12 +705,12 @@ class _ActivityViewState extends ConsumerState<ActivityView> with AutomaticKeepA
               width: 30,
               height: 30,
               decoration: BoxDecoration(color: color.withValues(alpha: .12), borderRadius: BorderRadius.circular(9)),
-              child: Icon(icon, size: 16, color: e.severity == LogSeverity.error ? t.bad : color),
+              child: Icon(icon, size: 16, color: e.severity == LogSeverity.error ? VaColors.danger : color),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(e.message, style: text.bodyMedium?.copyWith(fontWeight: FontWeight.w500, color: e.severity == LogSeverity.error ? t.bad : null)),
+                Text(e.message, style: text.bodyMedium?.copyWith(fontWeight: FontWeight.w500, color: e.severity == LogSeverity.error ? VaColors.danger : null)),
                 Text(
                   '${clockTime(context, e.at)} · ${e.component == 'audit' ? 'You, in the Console' : sourceLabel(e.source)}',
                   style: text.labelSmall,
@@ -726,7 +718,7 @@ class _ActivityViewState extends ConsumerState<ActivityView> with AutomaticKeepA
                 if (open && e.fields.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 6),
-                    child: Column(children: [for (final f in e.fields.entries) KeyValue(f.key, '${f.value}', mono: true)]),
+                    child: Column(children: [for (final f in e.fields.entries) VaKeyValue(f.key, '${f.value}', mono: true)]),
                   ),
               ]),
             ),
@@ -734,7 +726,7 @@ class _ActivityViewState extends ConsumerState<ActivityView> with AutomaticKeepA
               IconButton(
                 tooltip: 'Open conversation',
                 onPressed: () => openChat(ref, threadId: e.fields['threadId'] as String),
-                icon: Icon(Icons.forum_outlined, size: 18, color: t.muted),
+                icon: Icon(Icons.forum_outlined, size: 18, color: VaColors.muted),
               ),
           ]),
         ),
@@ -755,10 +747,10 @@ class _ActivityViewState extends ConsumerState<ActivityView> with AutomaticKeepA
         ),
       ),
       const SizedBox(height: 8),
-      if (value.hasError) EmptyNote('Could not load activity: ${value.error}', icon: Icons.error_outline),
+      if (value.hasError) VaEmptyNote('Could not load activity: ${value.error}', icon: Icons.error_outline),
       if (!value.hasValue && !value.hasError) const Padding(padding: EdgeInsets.all(12), child: LinearProgressIndicator(minHeight: 2)),
-      if (value.hasValue && list.isEmpty) const Panel(child: EmptyNote('Nothing happened in this range.', icon: Icons.history)),
-      if (items.isNotEmpty) Panel(padding: const EdgeInsets.fromLTRB(14, 0, 14, 10), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: items)),
+      if (value.hasValue && list.isEmpty) const VaPanel(child: VaEmptyNote('Nothing happened in this range.', icon: Icons.history)),
+      if (items.isNotEmpty) VaPanel(padding: const EdgeInsets.fromLTRB(14, 0, 14, 10), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: items)),
     ]);
   }
 }

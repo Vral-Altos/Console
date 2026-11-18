@@ -21,8 +21,8 @@ import 'package:highlight/languages/swift.dart';
 import 'package:highlight/languages/typescript.dart';
 import 'package:highlight/languages/xml.dart';
 import 'package:highlight/languages/yaml.dart';
+import 'package:ui_mesh/ui_mesh.dart';
 
-import '../theme.dart';
 
 /// Syntax colouring for fenced code. Only the languages the agents
 /// commonly write are bundled (the full set would add ~1 MB to the web
@@ -55,18 +55,16 @@ final Highlight _hl = Highlight()..registerLanguages(_languages);
 /// Fence names the bundled grammars do not alias themselves.
 const _extraAliases = {'toml': 'ini', 'hcl': 'ini', 'tf': 'ini', 'terraform': 'ini', 'zsh': 'bash', 'sh': 'bash', 'html': 'xml'};
 
-/// The colours of each token class, derived from the Console's palette so
-/// code reads in both themes.
+/// The colours of each token class, on the VA dark surfaces (all ≥ 4.5:1 on
+/// a code block).
 Map<String, TextStyle> _styles(BuildContext context) {
-  final t = Tokens.of(context);
-  final dark = Theme.of(context).brightness == Brightness.dark;
-  final keyword = TextStyle(color: dark ? const Color(0xFFC79BFF) : const Color(0xFF8A3FD1));
-  final string = TextStyle(color: dark ? const Color(0xFF8BD49C) : const Color(0xFF1C7C4A));
-  final number = TextStyle(color: dark ? const Color(0xFFF0A35E) : const Color(0xFFB0571B));
-  final title = TextStyle(color: dark ? const Color(0xFF7FB4FF) : const Color(0xFF2F5FC4));
-  final type = TextStyle(color: dark ? const Color(0xFF5FD0C0) : const Color(0xFF137A6E));
-  final comment = TextStyle(color: t.faint, fontStyle: FontStyle.italic);
-  final meta = TextStyle(color: t.muted);
+  final keyword = TextStyle(color: const Color(0xFFC79BFF));
+  final string = TextStyle(color: const Color(0xFF8BD49C));
+  final number = TextStyle(color: const Color(0xFFF0A35E));
+  final title = TextStyle(color: const Color(0xFF7FB4FF));
+  final type = TextStyle(color: const Color(0xFF5FD0C0));
+  final comment = TextStyle(color: VaColors.faint, fontStyle: FontStyle.italic);
+  final meta = TextStyle(color: VaColors.muted);
   return {
     'keyword': keyword,
     'selector-tag': keyword,
@@ -96,7 +94,7 @@ Map<String, TextStyle> _styles(BuildContext context) {
     'meta': meta,
     'meta-keyword': keyword,
     'meta-string': string,
-    'deletion': TextStyle(color: t.bad),
+    'deletion': TextStyle(color: VaColors.danger),
     'emphasis': const TextStyle(fontStyle: FontStyle.italic),
     'strong': const TextStyle(fontWeight: FontWeight.w600),
     'bullet': number,

@@ -6,10 +6,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:ui_mesh/ui_mesh.dart';
 
 import '../../data/models.dart';
 import '../../data/providers.dart';
-import '../theme.dart';
 import '../widgets.dart';
 import 'graph.dart';
 import 'iso_painter.dart';
@@ -204,7 +204,7 @@ class _TopologyViewState extends State<TopologyView> with TickerProviderStateMix
 
   @override
   Widget build(BuildContext context) {
-    final mono = Tokens.of(context).mono;
+    final mono = VaType.mono;
     final graph = widget.graph;
     final byId = {for (final e in graph.entities) e.id: e};
     final focusId = _selected ?? _hovered;
@@ -445,7 +445,7 @@ class _Hud extends StatelessWidget {
             Row(mainAxisSize: MainAxisSize.min, children: [
               Container(width: 8, height: 8, decoration: const BoxDecoration(color: Holo.cyan, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Holo.cyan, blurRadius: 8)])),
               const SizedBox(width: 10),
-              Text('TOPOLOGY', style: s(15, w: FontWeight.w800, spacing: 4)),
+              Text('TOPOLOGY', style: s(15, w: FontWeight.w700, spacing: 4)),
             ]),
             const SizedBox(height: 2),
             Text(
@@ -524,7 +524,7 @@ class _Segmented extends StatelessWidget {
     child: Row(mainAxisSize: MainAxisSize.min, children: [
       Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8),
-        child: Text(label, style: TextStyle(fontFamily: mono, fontSize: 9, color: Holo.dim, letterSpacing: 1.4)),
+        child: Text(label, style: TextStyle(fontFamily: mono, fontSize: 12, color: Holo.dim, letterSpacing: 1.4)),
       ),
       for (final (l, on, tap) in options)
         Semantics(
@@ -542,7 +542,7 @@ class _Segmented extends StatelessWidget {
                 color: on ? Holo.cyan.withValues(alpha: .18) : Colors.transparent,
                 borderRadius: BorderRadius.circular(4),
               ),
-              child: Text(l, style: TextStyle(fontFamily: mono, fontSize: 11.5, color: on ? Holo.cyan : Holo.text, fontWeight: on ? FontWeight.w700 : FontWeight.w500)),
+              child: Text(l, style: TextStyle(fontFamily: mono, fontSize: 12, color: on ? Holo.cyan : Holo.text, fontWeight: on ? FontWeight.w700 : FontWeight.w500)),
             ),
           ),
         ),
@@ -579,9 +579,9 @@ class _Chip extends StatelessWidget {
             boxShadow: selected ? [BoxShadow(color: Holo.cyan.withValues(alpha: .25), blurRadius: 10)] : null,
           ),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Text(label, style: TextStyle(fontFamily: mono, fontSize: 11.5, color: count == 0 ? Holo.dim : (selected ? Holo.cyan : Holo.text), fontWeight: selected ? FontWeight.w700 : FontWeight.w500)),
+            Text(label, style: TextStyle(fontFamily: mono, fontSize: 12, color: count == 0 ? Holo.dim : (selected ? Holo.cyan : Holo.text), fontWeight: selected ? FontWeight.w700 : FontWeight.w500)),
             const SizedBox(width: 6),
-            Text('$count', style: TextStyle(fontFamily: mono, fontSize: 10, color: Holo.dim)),
+            Text('$count', style: TextStyle(fontFamily: mono, fontSize: 12, color: Holo.dim)),
           ]),
         ),
       ),
@@ -663,7 +663,7 @@ class _LegendState extends State<_Legend> {
                   for (final b in Boundary.values)
                     Container(width: 7, height: 7, margin: const EdgeInsets.only(right: 4), color: Holo.boundary(b)),
                   const SizedBox(width: 6),
-                  Text('LEGEND', style: TextStyle(fontFamily: widget.mono, fontSize: 10, color: Holo.dim, letterSpacing: 1.4)),
+                  Text('LEGEND', style: TextStyle(fontFamily: widget.mono, fontSize: 12, color: Holo.dim, letterSpacing: 1.4)),
                 ]),
               ),
       ),
@@ -672,7 +672,7 @@ class _LegendState extends State<_Legend> {
 
   Widget _body(BuildContext context) {
     final mono = widget.mono;
-    TextStyle s(Color c) => TextStyle(fontFamily: mono, fontSize: 10, color: c, letterSpacing: .5);
+    TextStyle s(Color c) => TextStyle(fontFamily: mono, fontSize: 12, color: c, letterSpacing: .5);
     Widget row(Color c, String l, {bool diamond = false}) => Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -894,7 +894,7 @@ class _Kv extends StatelessWidget {
     child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
       SizedBox(
         width: 92,
-        child: Text(k, style: TextStyle(fontFamily: mono, fontSize: 9, color: Holo.dim, letterSpacing: 1.2, height: 1.6), overflow: TextOverflow.ellipsis),
+        child: Text(k, style: TextStyle(fontFamily: mono, fontSize: 12, color: Holo.dim, letterSpacing: 1.2, height: 1.6), overflow: TextOverflow.ellipsis),
       ),
       Expanded(child: v),
     ]),
