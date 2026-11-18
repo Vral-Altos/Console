@@ -62,7 +62,7 @@ while it arrives); the tools a turn used fold into one line that opens to the
 list; fenced code is syntax-coloured (`lib/ui/chat/code_highlight.dart`, a
 bundled subset of `highlight` grammars); new messages rise in, the streamed
 answer becomes the finished reply in place, and a "New messages" pill appears
-when you have scrolled up. Light/dark switch with a fade.
+when you have scrolled up. One dark theme, the VA design system (`meshes/ui_mesh`).
 
 Only the operator's verified Google account (siddharth.chitikela@) gets in (`lib/data/firebase.dart`
 and `firestore.rules`, which must list the same accounts).
