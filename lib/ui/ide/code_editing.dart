@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../chat/code_highlight.dart';
+import 'package:chat_mesh/chat_mesh.dart' show highlightCode, hasGrammar, languageKeywords;
 
 /// The highlight grammar for a file name, or null for plain text.
 String? languageForFile(String name) {

@@ -1,21 +1,13 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:va_console/data/attachments.dart';
+import 'package:chat_mesh/chat_mesh.dart' show threadsProvider, activeMessagesProvider, ChatThread, ChatMessage, MessageStatus;
 import 'package:va_console/data/models.dart';
 import 'package:va_console/data/providers.dart';
 import 'package:va_console/ui/app.dart';
 import 'package:va_console/ui/billing_page.dart';
-import 'package:va_console/ui/chat/chat_page.dart';
-import 'package:va_console/ui/chat/code_highlight.dart';
-import 'package:va_console/ui/chat/composer.dart';
-import 'package:va_console/ui/chat/markdown_view.dart';
-import 'package:va_console/ui/chat/message_tiles.dart';
-import 'package:va_console/ui/chat/chat_naming.dart';
-import 'package:va_console/ui/chat/thread_sidebar.dart';
 import 'package:va_console/ui/logs_page.dart';
 import 'package:va_console/ui/overview_page.dart';
 import 'package:va_console/ui/projects_page.dart';
@@ -68,12 +60,10 @@ List overridesWith({
   List<Approval> approvals = const [],
   List<LogEntry> logs = const [],
   List<MetricHour> metrics = const [],
-  List<ChatProject> projects = const [],
 }) {
   final h = hosts ?? {'mac': macStatus()};
   return [
     threadsProvider.overrideWith((ref) => Stream.value(threads)),
-    chatProjectsProvider.overrideWith((ref) => Stream.value(projects)),
     activeMessagesProvider.overrideWith((ref) => Stream.value(active)),
     allStatusProvider.overrideWith((ref) => Stream.value(h)),
     macStatusProvider.overrideWith((ref) => Stream.value(h['mac'])),
@@ -127,28 +117,6 @@ BillingBreakdown breakdown() => BillingBreakdown(
 );
 
 /// Test-mode attachments: uploads complete when [release] is called.
-class MemoryStore implements AttachmentStore {
-  final uploads = <String, Uint8List>{};
-  final discarded = <String>[];
-  Completer<void> gate = Completer<void>()..complete();
-  var _n = 0;
-
-  @override
-  Future<AttachmentRef> upload(PickedFile file, {void Function(double progress)? onProgress}) async {
-    onProgress?.call(.5);
-    await gate.future;
-    final path = 'attachments/upload${_n++}/${file.name}';
-    uploads[path] = file.bytes;
-    return AttachmentRef(path: path, name: file.name, contentType: contentTypeFor(file.name, file.contentType), size: file.size);
-  }
-
-  @override
-  Future<Uint8List?> read(AttachmentRef ref) async => uploads[ref.path];
-
-  @override
-  Future<void> discard(AttachmentRef ref) async => discarded.add(ref.path);
-}
-
 void main() {
   testWidgets('without Firebase configured the app says so', (tester) async {
     await tester.pumpWidget(const ProviderScope(child: ConsoleApp()));
@@ -159,7 +127,7 @@ void main() {
   testWidgets('overview: live work, usage, cost, hosts and accounts', (tester) async {
     size(tester, const Size(1400, 2600));
     await tester.pumpWidget(host(const OverviewPage(), overridesWith(
-      threads: const [ChatThread(id: 't1', agent: 'financier', title: 'November budget')],
+      threads: const [ChatThread(id: 't1', agent: 'financier', title: 'November budget', folder: 'area/finance')],
       active: [ChatMessage(id: 'm', threadId: 't1', fromOperator: true, text: 'q', status: MessageStatus.running, claimedBy: 'mac', activity: 'Using Read', createdAt: now)],
       days: [UsageDay(day: today, turns: 7, costUsd: 1.5, outputTokens: 4200, failed: 1)],
       stats: const UsageStats(turns: 9, costUsd: 2, byAgent: {'genie': UsageSlice(turns: 6, costUsd: 1), 'financier': UsageSlice(turns: 3, costUsd: 1)}),
@@ -194,261 +162,6 @@ void main() {
     expect(find.textContaining('No chat turns'), findsOneWidget);
     expect(find.text('This host has not reported yet.'), findsNWidgets(2));
     expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('a conversation shows replies, live progress, failures and stops', (tester) async {
-    size(tester, const Size(1300, 1800));
-    final messages = [
-      ChatMessage(id: '1', threadId: 't1', fromOperator: true, text: 'q1', status: MessageStatus.done, createdAt: now),
-      ChatMessage(
-        id: '2', threadId: 't1', fromOperator: false, text: '**a1** with `code`', placement: 'mac', accountId: 'pers',
-        costUsd: .05, outputTokens: 1200, contextTokens: 18400, durationMs: 4200, model: 'claude-opus-5-5', tools: const ['Read', 'Read'], createdAt: now,
-        quota: QuotaView(fiveHour: UsageView(utilization: .42, resetsAt: now.add(const Duration(hours: 2))), sevenDay: const UsageView(utilization: .18)),
-      ),
-      ChatMessage(id: '3', threadId: 't1', fromOperator: true, text: 'q2', status: MessageStatus.failed, error: 'No Claude account', createdAt: now),
-      ChatMessage(id: '4', threadId: 't1', fromOperator: true, text: 'q3', status: MessageStatus.cancelled, createdAt: now),
-      ChatMessage(id: '5', threadId: 't1', fromOperator: false, text: 'partial essay', stopped: true, createdAt: now),
-      ChatMessage(
-        id: '6', threadId: 't1', fromOperator: true, text: 'q4', status: MessageStatus.running, claimedBy: 'cloud',
-        claimedAt: now, partial: 'Writing now', activity: 'Using consult (va-mesh)', createdAt: now,
-      ),
-    ];
-    await tester.pumpWidget(host(const ConversationView(threadId: 't1'), [
-      ...overridesWith(
-        threads: [ChatThread(id: 't1', agent: 'financier', title: 'Budget', project: 'Financier', purpose: ChatPurpose.plan, costUsd: 1.234, createdAt: DateTime.utc(2026, 11, 16, 3))],
-        mesh: MeshView(accounts: [
-          AccountView(id: 'pers', label: 'Personal', fiveHour: const UsageView(utilization: .61), sevenDay: const UsageView(utilization: .2)),
-        ]),
-      ),
-      messagesProvider('t1').overrideWith((ref) => Stream.value(messages)),
-    ]));
-    await tester.pump();
-    expect(find.textContaining('a1'), findsWidgets);
-    // Each reply: model, tokens, cost and the quota after it, always shown.
-    expect(find.text('Opus 5.5 · 18k context · 1.2k out · \$0.05 · 5h 42% · 7d 18%'), findsOneWidget);
-    expect(find.textContaining('Mac · pers · 4s'), findsOneWidget);
-    // The header: the conversation's name, its model, the account's live quota and the total.
-    expect(find.text('[Financier] (\$1.23) 16/11: Budget'), findsOneWidget);
-    expect(find.textContaining('Plan'), findsWidgets);
-    await tester.pump(); // The registry's snapshot arrives.
-    expect(find.byType(QuotaChip), findsNWidgets(2));
-    expect(find.text('61%'), findsOneWidget, reason: 'live usage beats the reply\'s snapshot');
-    expect(find.text('Opus 5.5 · medium'), findsOneWidget, reason: 'the agent\'s own model and effort');
-    expect(find.text('\$1.23'), findsOneWidget);
-    // Tools fold to one line and open to the list.
-    expect(find.text('Used Read ×2 · 4s'), findsOneWidget);
-    expect(find.text('Read ×2'), findsNothing);
-    await tester.tap(find.text('Used Read ×2 · 4s'));
-    await tester.pump(const Duration(milliseconds: 300));
-    expect(find.text('Read ×2'), findsOneWidget);
-    expect(find.text('This turn failed'), findsOneWidget);
-    expect(find.text('No Claude account'), findsOneWidget);
-    expect(find.widgetWithText(TextButton, 'Retry'), findsOneWidget);
-    expect(find.text('Stopped'), findsOneWidget);
-    expect(find.textContaining('Using consult (va-mesh)'), findsOneWidget);
-    expect(find.textContaining('Writing now'), findsOneWidget);
-    expect(find.byTooltip('Stop'), findsOneWidget, reason: 'the composer stops the running turn');
-    await tester.pump(const Duration(seconds: 2));
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('keys: Esc stops the running turn, ↑ in an empty box edits the last message', (tester) async {
-    size(tester, const Size(1300, 1200));
-    final stopped = <String>[];
-    final messages = [
-      ChatMessage(id: '1', threadId: 't1', fromOperator: true, text: 'first question', status: MessageStatus.done, createdAt: now),
-      ChatMessage(id: '2', threadId: 't1', fromOperator: false, text: 'answer', createdAt: now),
-      ChatMessage(id: '3', threadId: 't1', fromOperator: true, text: 'second question', status: MessageStatus.running, claimedAt: now, createdAt: now),
-    ];
-    final c = GlobalKey<ComposerState>();
-    await tester.pumpWidget(host(
-      Column(children: [
-        Expanded(
-          child: Composer(
-            key: c,
-            draftKey: 'k',
-            hint: 'h',
-            onSend: (_, _, _) async {},
-            onStop: () => stopped.add('stop'),
-            onEditLast: () => c.currentState!.restore(messages[2].text),
-            autofocus: true,
-          ),
-        ),
-      ]),
-      overridesWith(),
-    ));
-    await tester.pump();
-    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-    expect(stopped, ['stop']);
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
-    await tester.pump();
-    expect(find.text('second question'), findsOneWidget, reason: 'the last message is back in the box');
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
-    await tester.pump();
-    expect(find.text('second question'), findsOneWidget, reason: '↑ only edits from an empty box');
-  });
-
-  testWidgets('a conversation loads with a placeholder, then new messages rise in', (tester) async {
-    size(tester, const Size(1300, 1200));
-    final ctl = StreamController<List<ChatMessage>>();
-    await tester.pumpWidget(host(const ConversationView(threadId: 't1'), [
-      ...overridesWith(threads: const [ChatThread(id: 't1', agent: 'genie', title: 'Plans')]),
-      messagesProvider('t1').overrideWith((ref) => ctl.stream),
-    ]));
-    await tester.pump();
-    expect(find.byType(ConversationSkeleton), findsOneWidget);
-    final first = ChatMessage(id: '1', threadId: 't1', fromOperator: true, text: 'hello', status: MessageStatus.running, claimedAt: now, createdAt: now);
-    ctl.add([first]);
-    await tester.pump();
-    expect(find.byType(ConversationSkeleton), findsNothing);
-    double opacityOf(String text) => tester
-        .widget<FadeTransition>(find.ancestor(of: find.textContaining(text), matching: find.byType(FadeTransition)).first)
-        .opacity
-        .value;
-    expect(opacityOf('hello'), 1, reason: 'what the conversation opened with does not animate');
-    // The streamed answer turns into the finished reply in place.
-    ctl.add([first.copyWith(partial: 'Hi there')]);
-    await tester.pump();
-    expect(find.byType(PendingReply), findsOneWidget);
-    ctl.add([
-      first.copyWith(status: MessageStatus.done),
-      ChatMessage(id: '2', threadId: 't1', fromOperator: false, text: 'Hi there', createdAt: now),
-    ]);
-    await tester.pump();
-    expect(find.byType(PendingReply), findsNothing);
-    expect(find.byType(AgentReply), findsOneWidget);
-    // A question sent later rises in.
-    ctl.add([
-      first.copyWith(status: MessageStatus.done),
-      ChatMessage(id: '2', threadId: 't1', fromOperator: false, text: 'Hi there', createdAt: now),
-      ChatMessage(id: '3', threadId: 't1', fromOperator: true, text: 'next one', status: MessageStatus.queued, createdAt: now),
-    ]);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 40));
-    expect(opacityOf('next one'), lessThan(1));
-    await tester.pump(const Duration(milliseconds: 400));
-    expect(opacityOf('next one'), 1);
-    await ctl.close();
-  });
-
-  test('half-written Markdown: an open code fence is closed while it streams', () {
-    expect(streamingMarkdown('Here:\n```dart\nvoid main'), 'Here:\n```dart\nvoid main\n```');
-    expect(streamingMarkdown('Done.\n```\nx\n```\nMore'), 'Done.\n```\nx\n```\nMore ▍');
-  });
-
-  testWidgets('code is coloured for known languages and plain otherwise', (tester) async {
-    late TextSpan dart, plain, unknown;
-    await tester.pumpWidget(MaterialApp(
-      theme: vaTheme(),
-      home: Builder(builder: (context) {
-        dart = highlightCode(context, 'final x = "a"; // note', 'dart', const TextStyle());
-        plain = highlightCode(context, 'final x', null, const TextStyle());
-        unknown = highlightCode(context, 'final x', 'nosuchlang', const TextStyle());
-        return const SizedBox();
-      }),
-    ));
-    final colours = <Color>{};
-    void walk(InlineSpan s) {
-      if (s.style?.color != null) colours.add(s.style!.color!);
-      if (s is TextSpan) s.children?.forEach(walk);
-    }
-
-    walk(dart);
-    expect(dart.toPlainText(), 'final x = "a"; // note');
-    expect(colours.length, greaterThanOrEqualTo(3), reason: 'keyword, string and comment differ');
-    expect(plain.children, isNull);
-    expect(unknown.toPlainText(), 'final x');
-  });
-
-  testWidgets('a closed conversation offers a new chat instead of a composer', (tester) async {
-    size(tester, const Size(1300, 1000));
-    await tester.pumpWidget(host(const ConversationView(threadId: 't1'), [
-      ...overridesWith(threads: const [ChatThread(id: 't1', agent: 'roman', title: 'Deal', closed: true)]),
-      messagesProvider('t1').overrideWith((ref) => Stream.value([
-            ChatMessage(id: '1', threadId: 't1', fromOperator: true, text: 'Close this conversation.', kind: 'close', status: MessageStatus.done, createdAt: now),
-          ])),
-    ]));
-    await tester.pump();
-    expect(find.text('This conversation is closed.'), findsOneWidget);
-    expect(find.text('New chat with Roman'), findsOneWidget);
-    expect(find.textContaining('journal entry'), findsOneWidget);
-    expect(find.byTooltip('Send'), findsNothing);
-  });
-
-  testWidgets('a new chat lists the agents the hosts run, with descriptions', (tester) async {
-    size(tester, const Size(1300, 1000));
-    await tester.pumpWidget(host(const NewChatView(), overridesWith()));
-    await tester.pump();
-    expect(find.text('Who do you want to talk to?'), findsOneWidget);
-    expect(find.text('Finance and trading'), findsOneWidget);
-    expect(find.text('Your personal assistant'), findsOneWidget);
-    expect(find.text('On the Mac'), findsNWidgets(2));
-    expect(find.byTooltip('Send'), findsOneWidget);
-  });
-
-  test('a conversation is named [PROJECT] (COST) DD/MM: TOPIC', () {
-    // 23:30 UTC on the 15th is the 16th in Singapore.
-    final th = ChatThread(id: 't', agent: 'g', title: 'Dividend tax', project: 'Financier', costUsd: .42, createdAt: DateTime.utc(2026, 11, 15, 23, 30));
-    expect(ChatNaming.name(th), '[Financier] (\$0.42) 16/11: Dividend tax');
-    expect(ChatNaming.name(th.copyWith(project: null, costUsd: 0, title: ' ')), '[General] (\$0) 16/11: Untitled');
-    expect(ChatNaming.name(th.copyWith(costUsd: .004)), '[Financier] (<\$0.01) 16/11: Dividend tax');
-  });
-
-  test('conversations group by project or purpose; General and unfiled last, pinned first', () {
-    final n = DateTime(2026, 11, 4, 12);
-    final threads = [
-      ChatThread(id: 'g', agent: 'g', title: 'g', updatedAt: n),
-      ChatThread(id: 'f1', agent: 'g', title: 'f1', project: 'Financier', purpose: ChatPurpose.plan, updatedAt: n.subtract(const Duration(days: 2))),
-      ChatThread(id: 'f2', agent: 'g', title: 'f2', project: 'Financier', pinned: true, updatedAt: n.subtract(const Duration(days: 9))),
-      ChatThread(id: 'e', agent: 'g', title: 'e', project: 'EOS', purpose: ChatPurpose.research, updatedAt: n.subtract(const Duration(days: 1))),
-    ];
-    String show(List<(String, List<ChatThread>)> gs) => [for (final (k, l) in gs) '$k:${l.map((t) => t.id).join(',')}'].join(' ');
-    expect(show(ThreadSidebarGroups.by(ThreadGrouping.project, threads, n)), 'EOS:e Financier:f2,f1 General:g');
-    expect(show(ThreadSidebarGroups.by(ThreadGrouping.purpose, threads, n)), 'Research:e Plan:f1 Not filed yet:f2,g');
-  });
-
-  testWidgets('the sidebar groups by project with counts and cost, folds, and regroups', (tester) async {
-    size(tester, const Size(1300, 900));
-    final threads = [
-      ChatThread(id: 'a', agent: 'genie', title: 'Rebalance', project: 'Financier', purpose: ChatPurpose.advice, costUsd: .5, createdAt: now, updatedAt: now),
-      ChatThread(id: 'b', agent: 'genie', title: 'Tax', project: 'Financier', purpose: ChatPurpose.research, costUsd: .25, createdAt: now, updatedAt: now),
-      ChatThread(id: 'c', agent: 'tucson', title: 'Schedule', purpose: ChatPurpose.admin, costUsd: .1, createdAt: now, updatedAt: now),
-    ];
-    await tester.pumpWidget(host(const ThreadSidebar(), overridesWith(threads: threads, projects: const [ChatProject(id: 'financier', name: 'Financier')])));
-    await tester.pump();
-    final d = ChatNaming.day(now);
-    expect(find.text('Financier'), findsOneWidget);
-    expect(find.text('2 · \$0.75'), findsOneWidget);
-    expect(find.text('General'), findsOneWidget);
-    expect(find.text('[Financier] (\$0.50) $d: Rebalance'), findsOneWidget);
-    expect(find.text('[General] (\$0.10) $d: Schedule'), findsOneWidget);
-    await tester.tap(find.text('Financier'));
-    await tester.pump(const Duration(milliseconds: 300));
-    expect(find.text('[Financier] (\$0.50) $d: Rebalance'), findsNothing, reason: 'folded');
-    await tester.tap(find.text('Purpose'));
-    await tester.pump(const Duration(milliseconds: 300));
-    for (final g in ['Advice', 'Research', 'Admin']) {
-      expect(find.text(g), findsOneWidget);
-    }
-    expect(find.text('[Financier] (\$0.50) $d: Rebalance'), findsOneWidget);
-    await tester.tap(find.byKey(const Key('manage-projects')));
-    await tester.pumpAndSettle();
-    expect(find.text('2 conversations · \$0.75'), findsOneWidget);
-    expect(find.text('1 conversation · \$0.10'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
-
-  test('conversations group by pinned, then by age', () {
-    final n = DateTime(2026, 11, 4, 12);
-    final groups = ThreadSidebarGroups.of([
-      ChatThread(id: 'p', agent: 'g', title: 'p', pinned: true, updatedAt: DateTime(2026, 1, 1)),
-      ChatThread(id: 'a', agent: 'g', title: 'a', updatedAt: n),
-      ChatThread(id: 'b', agent: 'g', title: 'b', updatedAt: n.subtract(const Duration(days: 1))),
-      ChatThread(id: 'c', agent: 'g', title: 'c', updatedAt: n.subtract(const Duration(days: 3))),
-      ChatThread(id: 'd', agent: 'g', title: 'd', updatedAt: n.subtract(const Duration(days: 90))),
-    ], n);
-    expect([for (final (k, l) in groups) '$k:${l.map((t) => t.id).join()}'],
-        ['Pinned:p', 'Today:a', 'Yesterday:b', 'Previous 7 days:c', 'Older:d']);
   });
 
   testWidgets('projects: Devstations by project, with directors and controls', (tester) async {
@@ -504,7 +217,7 @@ void main() {
     testWidgets('every page fits a phone', (tester) async {
       size(tester, const Size(390, 844));
       final o = overridesWith(
-        threads: const [ChatThread(id: 't1', agent: 'genie', title: 'A rather long conversation title that must ellipsize')],
+        threads: const [ChatThread(id: 't1', agent: 'genie', title: 'A rather long conversation title that must ellipsize', folder: 'area/genie')],
         devstations: const [Devstation(id: 'atlas', project: 'Atlas', state: 'running', desired: 'running', machineType: 'e2-standard-2')],
         billing: BillingView(costAmount: 2.5, budgetAmount: 30, currencyCode: 'SGD', updatedAt: now, days: {today: 2.5}),
         breakdown: breakdown(),
@@ -514,14 +227,8 @@ void main() {
           SessionView(sessionId: 's', agent: 'genie', taskId: 'console-t1', accountId: 'mac', status: 'active', contextTokens: 900, turns: 2, compactions: 0, lastUsedAt: now),
         ]),
       );
-      for (final page in [const OverviewPage(), const ProjectsPage(), const BillingPage(), const SystemPage(), const ChatPage(), const LogsPage()]) {
-        await tester.pumpWidget(host(page, [
-          ...o,
-          messagesProvider('t1').overrideWith((ref) => Stream.value([
-                ChatMessage(id: '1', threadId: 't1', fromOperator: true, text: 'hello', status: MessageStatus.done, createdAt: now),
-                ChatMessage(id: '2', threadId: 't1', fromOperator: false, text: '| a | b |\n|---|---|\n| 1 | 2 |\n\n```dart\nfinal x = 1;\n```', createdAt: now),
-              ])),
-        ]));
+      for (final page in [const OverviewPage(), const ProjectsPage(), const BillingPage(), const SystemPage(), const LogsPage()]) {
+        await tester.pumpWidget(host(page, o));
         await tester.pump();
         expect(tester.takeException(), isNull, reason: '${page.runtimeType}');
       }
@@ -661,235 +368,5 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  group('attachments and mentions', () {
-    final threads = [
-      ChatThread(id: 't1', agent: 'genie', title: 'Current', updatedAt: now),
-      ChatThread(id: 't2', agent: 'roman', title: 'Q4 negotiation plan', updatedAt: now),
-      const ChatThread(id: 't3', agent: 'genie', title: 'Old stuff', archived: true),
-    ];
-    const devstations = [Devstation(id: 'sky', project: 'Skyhorse', state: 'running', desired: 'running')];
-
-    Future<({GlobalKey<ComposerState> key, List<(String, List<AttachmentRef>, List<MentionRef>)> sent})> pumpComposer(
-      WidgetTester tester,
-      MemoryStore store,
-    ) async {
-      size(tester, const Size(1000, 900));
-      final key = GlobalKey<ComposerState>();
-      final sent = <(String, List<AttachmentRef>, List<MentionRef>)>[];
-      await tester.pumpWidget(host(
-        Column(children: [
-          const Spacer(),
-          Composer(
-            key: key,
-            draftKey: 't1',
-            threadId: 't1',
-            hint: 'Reply…',
-            onSend: (t, a, m) async => sent.add((t, a, m)),
-          ),
-        ]),
-        [
-          ...overridesWith(threads: threads, devstations: devstations),
-          attachmentStoreProvider.overrideWithValue(store),
-        ],
-      ));
-      await tester.pump();
-      await tester.pump();
-      return (key: key, sent: sent);
-    }
-
-    testWidgets('files upload at once; send waits for them and carries them', (tester) async {
-      final store = MemoryStore()..gate = Completer<void>();
-      final c = await pumpComposer(tester, store);
-      c.key.currentState!.add([
-        PickedFile(name: 'chart.png', bytes: Uint8List.fromList(List.filled(10, 1))),
-        PickedFile(name: 'q3.pdf', bytes: Uint8List(2048)),
-        PickedFile(name: 'empty.txt', bytes: Uint8List(0)),
-      ]);
-      await tester.pump();
-      expect(find.text('chart.png'), findsOneWidget);
-      expect(find.text('2 KB · 50%'), findsOneWidget, reason: 'progress while uploading');
-      expect(find.text('empty.txt is empty.'), findsOneWidget);
-      await tester.enterText(find.byType(TextField), 'what do these show?');
-      await tester.pump();
-      expect(find.byTooltip('Waiting for uploads…'), findsOneWidget);
-      await tester.testTextInput.receiveAction(TextInputAction.newline);
-      expect(c.sent, isEmpty);
-
-      store.gate.complete();
-      await tester.pump();
-      await tester.pump();
-      await tester.tap(find.byTooltip('Send'));
-      await tester.pump();
-      expect(c.sent.single.$1, 'what do these show?');
-      expect([for (final a in c.sent.single.$2) a.name], ['chart.png', 'q3.pdf']);
-      expect(c.sent.single.$2.last.contentType, 'application/pdf');
-      expect(find.text('chart.png'), findsNothing, reason: 'cleared once sent');
-      expect(store.discarded, isEmpty, reason: 'sent files stay');
-    });
-
-    testWidgets('a file can be sent without text, and a removed one is discarded', (tester) async {
-      final store = MemoryStore();
-      final c = await pumpComposer(tester, store);
-      c.key.currentState!.add([
-        PickedFile(name: 'a.csv', bytes: Uint8List(5)),
-        PickedFile(name: 'b.csv', bytes: Uint8List(5)),
-      ]);
-      await tester.pump();
-      await tester.pump();
-      await tester.tap(find.byTooltip('Remove b.csv'));
-      await tester.pump();
-      expect(store.discarded.single, endsWith('b.csv'));
-      await tester.tap(find.byTooltip('Send'));
-      await tester.pump();
-      expect(c.sent.single.$1, '');
-      expect(c.sent.single.$2.single.name, 'a.csv');
-    });
-
-    testWidgets('limits: ten files, 25 MB each', (tester) async {
-      final store = MemoryStore();
-      final c = await pumpComposer(tester, store);
-      c.key.currentState!.add([
-        PickedFile(name: 'huge.mov', bytes: Uint8List(AttachmentLimits.maxBytes + 1)),
-        for (var i = 0; i < 11; i++) PickedFile(name: 'f$i.txt', bytes: Uint8List(1)),
-      ]);
-      await tester.pump();
-      expect(find.textContaining('At most 10 files per message.'), findsOneWidget);
-      expect(find.textContaining('huge.mov is over 25 MB.'), findsOneWidget);
-      expect(store.uploads.length + 0, lessThanOrEqualTo(10));
-    });
-
-    testWidgets('@ suggests conversations, projects and agents; picking one mentions it', (tester) async {
-      final c = await pumpComposer(tester, MemoryStore());
-      await tester.enterText(find.byType(TextField), 'compare with @');
-      await tester.pump();
-      expect(find.text('Conversations'), findsOneWidget);
-      expect(find.text('Q4 negotiation plan'), findsOneWidget);
-      expect(find.text('Current'), findsNothing, reason: 'not the conversation itself');
-      expect(find.text('Old stuff'), findsNothing, reason: 'not archived ones');
-      expect(find.text('Skyhorse'), findsOneWidget);
-      expect(find.text('Genie'), findsOneWidget);
-
-      await tester.enterText(find.byType(TextField), 'compare with @neg');
-      await tester.pump();
-      expect(find.text('Skyhorse'), findsNothing);
-      await tester.tap(find.text('Q4 negotiation plan'));
-      await tester.pump();
-      final field = tester.widget<TextField>(find.byType(TextField));
-      expect(field.controller!.text, 'compare with @Q4 negotiation plan ');
-
-      // Keyboard: arrows and Enter pick; Escape closes.
-      await tester.enterText(find.byType(TextField), '${field.controller!.text}and @sky');
-      await tester.pump();
-      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-      await tester.pump();
-      expect(field.controller!.text, 'compare with @Q4 negotiation plan and @Skyhorse ');
-      await tester.enterText(find.byType(TextField), '${field.controller!.text}ask @');
-      await tester.pump();
-      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-      await tester.pump();
-      expect(find.text('Agents'), findsNothing);
-      await tester.enterText(find.byType(TextField), '${field.controller!.text}x');
-      await tester.pump();
-      expect(find.text('Agents'), findsNothing, reason: 'dismissed until a new @');
-      final typed = field.controller!.text;
-      await tester.enterText(find.byType(TextField), typed.substring(0, typed.length - 2));
-      await tester.pump();
-      await tester.enterText(find.byType(TextField), '${field.controller!.text}@fin');
-      await tester.pump();
-      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-      await tester.pump();
-
-      await tester.tap(find.byTooltip('Send'));
-      await tester.pump();
-      expect(c.sent.single.$1, 'compare with @Q4 negotiation plan and @Skyhorse ask @Financier');
-      expect(c.sent.single.$3, const [
-        MentionRef(kind: MentionKind.thread, id: 't2', label: 'Q4 negotiation plan'),
-        MentionRef(kind: MentionKind.project, id: 'sky', label: 'Skyhorse'),
-        MentionRef(kind: MentionKind.agent, id: 'financier', label: 'Financier'),
-      ]);
-    });
-
-    testWidgets('a mention deleted from the text is not sent', (tester) async {
-      final c = await pumpComposer(tester, MemoryStore());
-      await tester.enterText(find.byType(TextField), '@Sky');
-      await tester.pump();
-      await tester.tap(find.text('Skyhorse'));
-      await tester.pump();
-      await tester.enterText(find.byType(TextField), 'never mind');
-      await tester.pump();
-      await tester.tap(find.byTooltip('Send'));
-      await tester.pump();
-      expect(c.sent.single.$3, isEmpty);
-    });
-
-    testWidgets('sent messages show their files, images and highlighted mentions; edit restores them', (tester) async {
-      size(tester, const Size(1300, 1400));
-      final store = MemoryStore();
-      store.uploads['attachments/x/shot.png'] = Uint8List.fromList(_png);
-      const shot = AttachmentRef(path: 'attachments/x/shot.png', name: 'shot.png', contentType: 'image/png', size: 67);
-      const pdf = AttachmentRef(path: 'attachments/y/q3.pdf', name: 'q3.pdf', contentType: 'application/pdf', size: 2048);
-      const plan = MentionRef(kind: MentionKind.thread, id: 't2', label: 'Plan');
-      final messages = [
-        ChatMessage(
-          id: '1', threadId: 't1', fromOperator: true, text: 'see @Plan', status: MessageStatus.done, createdAt: now,
-          attachments: const [shot, pdf], mentions: const [plan],
-        ),
-        ChatMessage(id: '2', threadId: 't1', fromOperator: false, text: 'Seen.', createdAt: now),
-        ChatMessage(id: '3', threadId: 't1', fromOperator: true, text: '', status: MessageStatus.done, createdAt: now, attachments: const [pdf]),
-      ];
-      await tester.pumpWidget(host(const ConversationView(threadId: 't1'), [
-        ...overridesWith(threads: threads),
-        attachmentStoreProvider.overrideWithValue(store),
-        messagesProvider('t1').overrideWith((ref) => Stream.value(messages)),
-      ]));
-      await tester.pump();
-      await tester.pump();
-      expect(find.bySemanticsLabel('Image shot.png'), findsOneWidget);
-      expect(find.text('q3.pdf'), findsNWidgets(2));
-      expect(find.text('2 KB'), findsNWidgets(2));
-      final rich = tester.widgetList<RichText>(find.byType(RichText)).firstWhere((r) => r.text.toPlainText() == 'see @Plan');
-      final spans = <TextSpan>[];
-      rich.text.visitChildren((s) {
-        if (s is TextSpan && s.text == '@Plan') spans.add(s);
-        return true;
-      });
-      expect(spans.single.style?.fontWeight, FontWeight.w600, reason: 'the mention is highlighted');
-
-      final bubble = find.ancestor(of: find.text('see @Plan', findRichText: true), matching: find.byType(OperatorBubble));
-      await tester.tap(find.descendant(of: bubble, matching: find.byTooltip('Edit and resend')));
-      await tester.pump();
-      final field = tester.widget<TextField>(find.byType(TextField));
-      expect(field.controller!.text, 'see @Plan');
-      expect(find.byTooltip('Remove shot.png'), findsOneWidget, reason: 'files come back too');
-      expect(tester.takeException(), isNull);
-    });
-  });
-
-  testWidgets('chat header: the model and effort menu shows the choice and offers every option', (tester) async {
-    size(tester, const Size(1300, 900));
-    await tester.pumpWidget(host(const ConversationView(threadId: 't1'), [
-      ...overridesWith(threads: [
-        ChatThread(id: 't1', agent: 'financier', title: 'Budget', model: 'claude-sonnet-5-5', effort: 'high', createdAt: DateTime.utc(2026, 11, 18)),
-      ]),
-      messagesProvider('t1').overrideWith((ref) => Stream.value(const <ChatMessage>[])),
-    ]));
-    await tester.pump();
-    await tester.pump();
-    expect(find.text('Sonnet 5.5 · high'), findsOneWidget);
-    await tester.tap(find.byKey(const Key('model-effort')));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
-    expect(find.text('Agent default (Opus 5.5)'), findsOneWidget);
-    expect(find.text('Agent default (medium)'), findsOneWidget);
-    for (final label in ['Opus 5.5', 'Haiku 5.5', 'Fable 5.2', 'Low — quickest, cheapest', 'Extra high', 'Max — slowest, most thorough']) {
-      expect(find.text(label), findsOneWidget, reason: label);
-    }
-    expect(tester.takeException(), isNull);
-  });
 }
 
-/// A 1×1 PNG.
-const _png = [
-  137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 13, 73, 68, 65, 84,
-  120, 156, 99, 248, 207, 192, 240, 31, 0, 5, 0, 1, 255, 137, 153, 61, 29, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130,
-];

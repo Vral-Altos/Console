@@ -62,6 +62,10 @@
     {
       "target": "attachments",
       "rules": "storage.rules"
+    },
+    {
+      "target": "agentstate",
+      "rules": "project_files.rules"
     }
   ]
 }

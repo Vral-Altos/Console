@@ -477,7 +477,7 @@ class LogRow extends ConsumerWidget {
                       ),
                     if (threadId != null)
                       FilledButton.tonalIcon(
-                        onPressed: () => openChat(ref, threadId: threadId),
+                        onPressed: () => openInGenie(threadId: threadId),
                         icon: const Icon(Icons.forum_outlined, size: 16),
                         label: const Text('Open conversation'),
                       ),
@@ -725,7 +725,7 @@ class _ActivityViewState extends ConsumerState<ActivityView> with AutomaticKeepA
             if (e.fields['threadId'] is String && e.component == 'audit')
               IconButton(
                 tooltip: 'Open conversation',
-                onPressed: () => openChat(ref, threadId: e.fields['threadId'] as String),
+                onPressed: () => openInGenie(threadId: e.fields['threadId'] as String),
                 icon: Icon(Icons.forum_outlined, size: 18, color: VaColors.muted),
               ),
           ]),

@@ -5,12 +5,22 @@
   "targets": {
     "vral-altos": {
       "storage": {
-        "attachments": ["vral-altos-attachments"]
+        "attachments": [
+          "vral-altos-attachments"
+        ],
+        "agentstate": [
+          "vral-altos-agent-state"
+        ]
       }
     },
     "demo-va-console": {
       "storage": {
-        "attachments": ["vral-altos-attachments"]
+        "attachments": [
+          "vral-altos-attachments"
+        ],
+        "agentstate": [
+          "vral-altos-agent-state"
+        ]
       }
     }
   }

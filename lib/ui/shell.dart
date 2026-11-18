@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:chat_mesh/chat_mesh.dart' show activeMessagesProvider, ChatMessage;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/models.dart';
 import '../data/providers.dart';
 import 'billing_page.dart';
-import 'chat/chat_page.dart';
 import 'logs_page.dart';
 import 'overview_page.dart';
 import 'projects_page.dart';
@@ -17,7 +17,6 @@ typedef _Dest = ({ConsolePage page, IconData icon, IconData selected, String lab
 
 const _destinations = <_Dest>[
   (page: ConsolePage.overview, icon: Icons.space_dashboard_outlined, selected: Icons.space_dashboard, label: 'Overview'),
-  (page: ConsolePage.chat, icon: Icons.forum_outlined, selected: Icons.forum, label: 'Chat'),
   (page: ConsolePage.projects, icon: Icons.folder_outlined, selected: Icons.folder, label: 'Projects'),
   (page: ConsolePage.topology, icon: Icons.hub_outlined, selected: Icons.hub, label: 'Topology'),
   (page: ConsolePage.billing, icon: Icons.payments_outlined, selected: Icons.payments, label: 'Billing'),
@@ -26,7 +25,7 @@ const _destinations = <_Dest>[
 ];
 
 /// The Console's frame: a sidebar on wide screens, a bottom bar on phones.
-/// Ctrl/⌘+K starts a new chat; Ctrl/⌘+1…7 switch pages.
+/// Ctrl/⌘+K opens Genie (the chat); Ctrl/⌘+1…6 switch pages.
 class Shell extends ConsumerWidget {
   const Shell({super.key});
 
@@ -39,14 +38,13 @@ class Shell extends ConsumerWidget {
     final active = ref.watch(activeMessagesProvider).value ?? const <ChatMessage>[];
     final approvals = (ref.watch(approvalsProvider).value ?? const <Approval>[]).where((a) => a.status == 'pending').length;
     final badges = {
-      ConsolePage.chat: active.isEmpty ? null : '${active.length}',
       ConsolePage.system: approvals == 0 ? null : '$approvals',
     };
 
     void go(ConsolePage p) => ref.read(pageProvider.notifier).go(p);
     final body = IndexedStack(
       index: page.index,
-      children: const [OverviewPage(), ChatPage(), ProjectsPage(), TopologyPage(), BillingPage(), LogsPage(), SystemPage()],
+      children: const [OverviewPage(), ProjectsPage(), TopologyPage(), BillingPage(), LogsPage(), SystemPage()],
     );
 
     return CallbackShortcuts(
@@ -55,8 +53,8 @@ class Shell extends ConsumerWidget {
           SingleActivator(LogicalKeyboardKey(LogicalKeyboardKey.digit1.keyId + i), control: true): () => go(d.page),
           SingleActivator(LogicalKeyboardKey(LogicalKeyboardKey.digit1.keyId + i), meta: true): () => go(d.page),
         },
-        const SingleActivator(LogicalKeyboardKey.keyK, control: true): () => openChat(ref),
-        const SingleActivator(LogicalKeyboardKey.keyK, meta: true): () => openChat(ref),
+        const SingleActivator(LogicalKeyboardKey.keyK, control: true): openInGenie,
+        const SingleActivator(LogicalKeyboardKey.keyK, meta: true): openInGenie,
       },
       child: Focus(
         autofocus: true,
@@ -65,11 +63,18 @@ class Shell extends ConsumerWidget {
             bottom: false,
             child: wide
                 ? Row(children: [
-                    _Sidebar(page: page, badges: badges, onGo: go),
+                    _Sidebar(page: page, badges: badges, onGo: go, running: active.length),
                     Expanded(child: body),
                   ])
                 : body,
           ),
+          floatingActionButton: wide || keyboard
+              ? null
+              : FloatingActionButton.small(
+                  tooltip: 'Open Genie (chat)',
+                  onPressed: openInGenie,
+                  child: Badge(isLabelVisible: active.isNotEmpty, label: Text('${active.length}'), child: const Icon(Icons.auto_awesome)),
+                ),
           bottomNavigationBar: wide || keyboard
               ? null
               : DecoratedBox(
@@ -97,8 +102,11 @@ class Shell extends ConsumerWidget {
 }
 
 class _Sidebar extends ConsumerWidget {
-  const _Sidebar({required this.page, required this.badges, required this.onGo});
+  const _Sidebar({required this.page, required this.badges, required this.onGo, required this.running});
   final ConsolePage page;
+
+  /// Turns running or queued (shown on the Genie link).
+  final int running;
   final Map<ConsolePage, String?> badges;
   final void Function(ConsolePage) onGo;
 
@@ -170,6 +178,38 @@ class _Sidebar extends ConsumerWidget {
               ),
             ),
           ),
+        const SizedBox(height: 6),
+        Tooltip(
+          message: 'Chat in Genie (⌘K)${running == 0 ? '' : ' · $running running'}',
+          child: Semantics(
+            button: true,
+            label: 'Open Genie',
+            excludeSemantics: true,
+            child: InkWell(
+              onTap: openInGenie,
+              borderRadius: BorderRadius.circular(12),
+              child: SizedBox(
+                width: 64,
+                child: Column(children: [
+                  SizedBox(
+                    height: 32,
+                    child: Badge(
+                      isLabelVisible: running > 0,
+                      label: Text('$running'),
+                      offset: const Offset(-4, 2),
+                      child: const Center(child: Icon(Icons.auto_awesome_outlined, size: 21, color: VaColors.muted)),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(mainAxisSize: MainAxisSize.min, children: [
+                    Text('Genie', style: text.labelSmall),
+                    const Icon(Icons.north_east_rounded, size: 11, color: VaColors.faint),
+                  ]),
+                ]),
+              ),
+            ),
+          ),
+        ),
         const Spacer(),
         const PlacementChip(),
         const SizedBox(height: 10),

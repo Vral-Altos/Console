@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "test": "node --test firestore.rules.test.mjs",
-    "test:storage": "node --test storage.rules.test.mjs"
+    "test:storage": "node --test storage.rules.test.mjs",
+    "test:projects": "node --test project_files.rules.test.mjs"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "5.0.1",

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:chat_mesh/chat_mesh.dart' show threadsProvider, ChatThread;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/models.dart';
@@ -175,7 +176,7 @@ class _SessionsPanelState extends ConsumerState<SessionsPanel> {
                   'handedOff' => VaStatusPill(label: 'handed off', color: VaColors.info, dense: true),
                   _ => VaStatusPill(label: s.status, color: VaColors.faint, dense: true),
                 };
-                final open = threadId != null && threads.containsKey(threadId) ? () => openChat(ref, threadId: threadId) : null;
+                final open = threadId != null && threads.containsKey(threadId) ? () => openInGenie(threadId: threadId) : null;
                 if (narrow) {
                   return InkWell(
                     onTap: open,

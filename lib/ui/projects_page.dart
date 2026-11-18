@@ -1,5 +1,6 @@
 import 'ide/ide_page.dart';
 import 'package:flutter/material.dart';
+import 'package:chat_mesh/chat_mesh.dart' show ChatFolders;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/models.dart';
@@ -221,7 +222,7 @@ class DevstationCard extends ConsumerWidget {
         label: const Text('Open IDE'),
       ),
       TextButton.icon(
-        onPressed: () => openChat(ref, agent: director),
+        onPressed: () => openInGenie(agent: director, folder: ChatFolders.project(ChatFolders.projectId(d.project))),
         icon: const Icon(Icons.forum_outlined, size: 18),
         label: const Text('Chat with director'),
       ),

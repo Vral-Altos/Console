@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:chat_mesh/chat_mesh.dart' show threadsProvider, activeMessagesProvider, ChatThread, ChatMessage, MessageStatus;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/models.dart';
@@ -335,7 +336,7 @@ class ActivityPanel extends ConsumerWidget {
                     ago(m.createdAt),
                   ].join(' · '),
                   live: m.status == MessageStatus.running,
-                  onTap: () => openChat(ref, threadId: m.threadId),
+                  onTap: () => openInGenie(threadId: m.threadId),
                 ),
               for (final r in factory)
                 _ActivityRow(
@@ -440,7 +441,7 @@ class ActiveTasksPanel extends ConsumerWidget {
                     final title = threadId == null ? s.taskId : threads[threadId]?.title ?? s.taskId;
                     return InkWell(
                       borderRadius: BorderRadius.circular(10),
-                      onTap: threadId == null || !threads.containsKey(threadId) ? null : () => openChat(ref, threadId: threadId),
+                      onTap: threadId == null || !threads.containsKey(threadId) ? null : () => openInGenie(threadId: threadId),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
                         child: Row(

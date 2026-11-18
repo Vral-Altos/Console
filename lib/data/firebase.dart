@@ -1,14 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'platform/standalone.dart';
 
-typedef FirebaseServices = ({FirebaseAuth auth, FirebaseFirestore db, FirebaseStorage storage});
-
-/// Chat attachments' bucket (`infra/attachments.tf`).
-const attachmentsBucket = String.fromEnvironment('ATTACHMENTS_BUCKET', defaultValue: 'vral-altos-attachments');
+typedef FirebaseServices = ({FirebaseAuth auth, FirebaseFirestore db});
 
 /// The platform database (the `(default)` one is Financier's).
 const platformDatabase = 'platform';
@@ -45,13 +41,11 @@ Future<FirebaseServices?> initializeFirebase() async {
   final auth = FirebaseAuth.instanceFor(app: app);
   final db = FirebaseFirestore.instanceFor(app: app, databaseId: platformDatabase);
   db.settings = const Settings(webExperimentalAutoDetectLongPolling: true);
-  final storage = FirebaseStorage.instanceFor(app: app, bucket: 'gs://$attachmentsBucket');
   // Debug builds, and builds made for local end-to-end tests
   // (--dart-define=USE_EMULATORS=true), talk to the local emulators only.
   if (kDebugMode || const bool.fromEnvironment('USE_EMULATORS')) {
     await auth.useAuthEmulator('localhost', const int.fromEnvironment('AUTH_EMULATOR_PORT', defaultValue: 9099));
     db.useFirestoreEmulator('localhost', const int.fromEnvironment('FIRESTORE_EMULATOR_PORT', defaultValue: 8080));
-    await storage.useStorageEmulator('localhost', const int.fromEnvironment('STORAGE_EMULATOR_PORT', defaultValue: 9199));
   }
-  return (auth: auth, db: db, storage: storage);
+  return (auth: auth, db: db);
 }

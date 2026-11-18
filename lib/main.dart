@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'data/attachments.dart';
+import 'package:chat_mesh/chat_mesh.dart' show chatRepositoryProvider, ChatRepository;
 import 'data/console_repository.dart';
 import 'data/firebase.dart';
 import 'data/telemetry.dart';
@@ -18,7 +18,8 @@ Future<void> main() async {
       overrides: [
         firebaseAuthProvider.overrideWithValue(firebase?.auth),
         firestoreProvider.overrideWithValue(firebase?.db),
-        attachmentStoreProvider.overrideWithValue(firebase == null ? null : FirebaseAttachmentStore(firebase.storage)),
+        // Live work and links to it (conversations are Genie's).
+        chatRepositoryProvider.overrideWithValue(firebase == null ? null : ChatRepository(firebase.db, source: 'console')),
       ],
       child: const ConsoleApp(),
     ),

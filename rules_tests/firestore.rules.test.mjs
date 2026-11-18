@@ -29,7 +29,7 @@ const anonymous = () => env.unauthenticatedContext().firestore();
 
 const thread = (extra = {}) => ({
   agent: 'genie', title: 'Hello', createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
-  closed: false, ...extra,
+  closed: false, folder: 'area/genie', ...extra,
 });
 const message = (extra = {}) => ({
   threadId: 't1', role: 'operator', kind: 'turn', text: 'hi', status: 'queued',
@@ -48,11 +48,12 @@ beforeEach(async () => {
   await env.clearFirestore();
   await env.withSecurityRulesDisabled(async (ctx) => {
     const db = ctx.firestore();
-    await setDoc(doc(db, 'threads/t1'), { agent: 'genie', title: 'T', closed: false });
+    await setDoc(doc(db, 'threads/t1'), { agent: 'genie', title: 'T', closed: false, folder: 'area/genie' });
     await setDoc(doc(db, 'threads/closed'), { agent: 'genie', title: 'C', closed: true });
     await setDoc(doc(db, 'messages/m1'), { threadId: 't1', role: 'agent', text: 'reply' });
     await setDoc(doc(db, 'status/mac'), { host: 'mac' });
     await setDoc(doc(db, 'agent_mesh/state'), { json: '{}' });
+    await setDoc(doc(db, 'agent_commands/genie'), { commands: ['compact'] });
     await setDoc(doc(db, 'autobench/latest'), { nav: 1 });
     await setDoc(doc(db, 'autobench/latest/days/2026-11-04'), { nav: 1 });
     await setDoc(doc(db, 'devstations/d1'), { project: 'p' });
@@ -75,7 +76,7 @@ beforeEach(async () => {
 
 describe('reads', () => {
   const readable = ['threads/t1', 'messages/m1', 'status/mac', 'agent_mesh/state', 'autobench/latest', 'devstations/d1',
-    'stats/usage', 'usage_days/2026-11-04', 'billing/current', 'billing/breakdown', 'topology/current', 'logs/l1', 'metrics/mac-worker~2026110410'];
+    'stats/usage', 'usage_days/2026-11-04', 'billing/current', 'billing/breakdown', 'topology/current', 'logs/l1', 'metrics/mac-worker~2026110410', 'agent_commands/genie'];
 
   test('the operator reads the Console data', async () => {
     for (const path of readable) {
@@ -130,10 +131,10 @@ describe('threads', () => {
     await assertFails(deleteDoc(doc(owner(), 'threads/t1')));
   });
 
-  test('the operator files a thread: project, purpose, topic', async () => {
-    await assertSucceeds(setDoc(doc(owner(), 'threads/p'), thread({ project: 'Financier', projectSet: true })));
-    await assertSucceeds(updateDoc(doc(owner(), 'threads/t1'), { project: 'EOS', projectSet: true }));
-    await assertSucceeds(updateDoc(doc(owner(), 'threads/t1'), { project: null, projectSet: true }));
+  test('the operator files a thread: folder, purpose, topic', async () => {
+    await assertSucceeds(setDoc(doc(owner(), 'threads/p'), thread({ folder: 'project/financier', folderSet: true })));
+    await assertSucceeds(updateDoc(doc(owner(), 'threads/t1'), { folder: 'area/redcon', folderSet: true }));
+    await assertSucceeds(updateDoc(doc(owner(), 'threads/t1'), { folder: 'project/vral-altos-2', folderSet: true }));
     await assertSucceeds(updateDoc(doc(owner(), 'threads/t1'), { purpose: 'research' }));
     await assertSucceeds(updateDoc(doc(owner(), 'threads/t1'), { title: 'Topic', titleSet: true }));
   });
@@ -147,9 +148,13 @@ describe('threads', () => {
   });
 
   test('bad filing, and the costs and names only workers write, are refused', async () => {
-    await assertFails(setDoc(doc(owner(), 'threads/p'), thread({ project: '' })));
+    await assertFails(setDoc(doc(owner(), 'threads/p'), thread({ folder: '' })));
+    await assertFails(setDoc(doc(owner(), 'threads/p'), thread({ folder: 'area/nowhere' })));
+    await assertFails(setDoc(doc(owner(), 'threads/p'), thread({ folder: 'project/Bad Id' })));
+    await assertFails(setDoc(doc(owner(), 'threads/p'), thread({ project: 'Financier' })));
+    await assertFails(updateDoc(doc(owner(), 'threads/t1'), { folder: deleteField() }));
     await assertFails(setDoc(doc(owner(), 'threads/p'), thread({ costUsd: 0 })));
-    await assertFails(updateDoc(doc(owner(), 'threads/t1'), { project: 'x'.repeat(81) }));
+    await assertFails(updateDoc(doc(owner(), 'threads/t1'), { folder: 'project/' + 'x'.repeat(81) }));
     await assertFails(updateDoc(doc(owner(), 'threads/t1'), { purpose: 'dance' }));
     await assertFails(updateDoc(doc(owner(), 'threads/t1'), { titleSet: 'yes' }));
     await assertFails(updateDoc(doc(owner(), 'threads/t1'), { costUsd: 0 }));
@@ -178,6 +183,7 @@ describe('chat projects', () => {
     await assertSucceeds(setDoc(doc(owner(), 'chat_projects/d'), { name: 'D', createdAt: serverTimestamp() }));
     await assertFails(updateDoc(doc(owner(), 'chat_projects/d'), { createdAt: new Date(0) }));
     await assertFails(setDoc(doc(stranger(), 'chat_projects/e'), { name: 'E', createdAt: serverTimestamp() }));
+    await assertFails(setDoc(doc(owner(), 'chat_projects/Not An Id'), { name: 'F', createdAt: serverTimestamp() }), 'the id is a folder id');
     await assertFails(getDocs(collection(stranger(), 'chat_projects')));
     await assertFails(deleteDoc(doc(stranger(), 'chat_projects/d')));
   });
@@ -306,6 +312,8 @@ describe('telemetry', () => {
   test('the Console adds its audit trail and client errors', async () => {
     await assertSucceeds(setDoc(doc(owner(), 'logs/a'), entry()));
     await assertSucceeds(setDoc(doc(owner(), 'logs/b'), entry({ component: 'client', severity: 'error' })));
+    await assertSucceeds(setDoc(doc(owner(), 'logs/c'), entry({ source: 'genie' })), 'Genie writes its own trail');
+    await assertSucceeds(setDoc(doc(owner(), 'logs/d'), entry({ source: 'tucson' })));
   });
 
   test('it cannot pose as a service or keep entries for long', async () => {

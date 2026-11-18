@@ -2,11 +2,12 @@ rules_version = '2';
 
 // Client rules for the Vral Altos *platform* database (deployed from
 // apps/console). Agents, the Mac worker, the cloud runner and Autobench use
-// IAM and are not subject to these rules. Clients get:
+// IAM and are not subject to these rules. Clients (the Console, Genie,
+// TUCSON) get:
 // - the operator only (the verified Google account below), nobody else;
 // - read access to the Console's data and the status the system reports;
 // - write access only to start threads and queue operator messages; to
-//   rename, pin, archive and file threads (project, purpose) and keep the
+//   rename, pin, archive and file threads (folder, purpose) and keep the
 //   chat projects; to cancel a queued message or ask a
 //   running one to stop; to queue Factory requests and decide approvals.
 service cloud.firestore {
@@ -21,34 +22,37 @@ service cloud.firestore {
       return v is string && v.size() > 0 && v.size() <= max;
     }
 
-    // A conversation's project: a chat project's name, or null (General).
-    function isProject(v) {
-      return v == null || isShortString(v, 80);
+    // Where a conversation lives in Genie's tree: an area, or a chat
+    // project's folder (agent_mesh ChatFolders, chat_mesh ChatFolders).
+    function isFolder(v) {
+      return v is string && (
+        v in ['area/genie', 'area/mission-control', 'area/finance', 'area/redcon', 'area/strategic-intel', 'area/rhog']
+        || v.matches('^project/[a-z0-9][a-z0-9-]{0,79}$'));
     }
 
-    // Conversations: created by the Console, maintained by the workers
-    // (cost, name: `ChatNamer`). The operator may file them: project,
-    // purpose, topic (`title`); `projectSet` / `titleSet` keep the namer off.
+    // Conversations: created by the apps, maintained by the workers (cost,
+    // name: `ChatNamer`). The operator may file them: folder, purpose, topic
+    // (`title`); `folderSet` / `titleSet` keep the namer off.
     match /threads/{threadId} {
       allow read: if isOwner();
       allow create: if isOwner()
-        && request.resource.data.keys().hasOnly(['agent', 'title', 'createdAt', 'updatedAt', 'closed', 'project', 'projectSet'])
+        && request.resource.data.keys().hasOnly(['agent', 'title', 'createdAt', 'updatedAt', 'closed', 'folder', 'folderSet'])
         && request.resource.data.agent.matches('^[a-z0-9][a-z0-9_-]{0,40}$')
         && isShortString(request.resource.data.title, 200)
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time
         && request.resource.data.closed == false
-        && isProject(request.resource.data.get('project', null))
-        && request.resource.data.get('projectSet', false) is bool;
+        && isFolder(request.resource.data.folder)
+        && request.resource.data.get('folderSet', false) is bool;
       allow update: if isOwner()
         && request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['title', 'titleSet', 'pinned', 'archived', 'project', 'projectSet', 'purpose', 'model', 'effort'])
+             .hasOnly(['title', 'titleSet', 'pinned', 'archived', 'folder', 'folderSet', 'purpose', 'model', 'effort'])
         && isShortString(request.resource.data.title, 200)
         && request.resource.data.get('pinned', false) is bool
         && request.resource.data.get('archived', false) is bool
         && request.resource.data.get('titleSet', false) is bool
-        && request.resource.data.get('projectSet', false) is bool
-        && isProject(request.resource.data.get('project', null))
+        && request.resource.data.get('folderSet', false) is bool
+        && isFolder(request.resource.data.get('folder', null))
         && request.resource.data.get('purpose', 'other')
              in ['build', 'fix', 'research', 'plan', 'advice', 'ops', 'admin', 'other']
         && request.resource.data.get('model', 'claude-opus-5-5')
@@ -57,11 +61,14 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // The projects conversations are filed under; the operator keeps the
-    // list, the namer reads it.
+    // The projects conversations are filed under (Genie's Projects folder);
+    // the operator keeps the list, the namer reads it. The id is the folder's
+    // (`project/<id>`) and the project files' (`projects/<id>/` in the
+    // agent-state bucket), so it never changes.
     match /chat_projects/{id} {
       allow read: if isOwner();
       allow create: if isOwner()
+        && id.matches('^[a-z0-9][a-z0-9-]{0,79}$')
         && request.resource.data.keys().hasOnly(['name', 'createdAt'])
         && isShortString(request.resource.data.name, 80)
         && request.resource.data.createdAt == request.time;
@@ -111,6 +118,10 @@ service cloud.firestore {
     match /agent_mesh/{doc} {
       allow read: if isOwner();
     }
+    // The slash commands each agent's Claude Code offers (workers).
+    match /agent_commands/{agent} {
+      allow read: if isOwner();
+    }
     match /autobench/latest {
       allow read: if isOwner();
     }
@@ -142,7 +153,7 @@ service cloud.firestore {
       allow read: if isOwner();
       allow create: if isOwner()
         && request.resource.data.keys().hasOnly(['at', 'source', 'component', 'severity', 'message', 'fields', 'expireAt'])
-        && request.resource.data.source == 'console'
+        && request.resource.data.source in ['console', 'genie', 'tucson']
         && request.resource.data.component in ['audit', 'client']
         && request.resource.data.severity in ['info', 'warning', 'error']
         && isShortString(request.resource.data.message, 2000)
