@@ -1,3 +1,4 @@
+import 'ide/ide_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -218,6 +219,12 @@ class DevstationCard extends ConsumerWidget {
           icon: Icon(Icons.delete_outline, color: t.muted),
         ),
       ],
+      TextButton.icon(
+        key: ValueKey('open-ide-${d.id}'),
+        onPressed: d.desired == 'absent' ? null : () => openIde(context, d),
+        icon: const Icon(Icons.code, size: 18),
+        label: const Text('Open IDE'),
+      ),
       TextButton.icon(
         onPressed: () => openChat(ref, agent: director),
         icon: const Icon(Icons.forum_outlined, size: 18),

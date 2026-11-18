@@ -27,8 +27,7 @@ import '../theme.dart';
 /// Syntax colouring for fenced code. Only the languages the agents
 /// commonly write are bundled (the full set would add ~1 MB to the web
 /// build); anything else is shown as plain text.
-final Highlight _hl = Highlight()
-  ..registerLanguages({
+final _languages = <String, Mode>{
     'bash': bash,
     'cpp': cpp,
     'css': css,
@@ -50,7 +49,8 @@ final Highlight _hl = Highlight()
     'typescript': typescript,
     'xml': xml,
     'yaml': yaml,
-  });
+};
+final Highlight _hl = Highlight()..registerLanguages(_languages);
 
 /// Fence names the bundled grammars do not alias themselves.
 const _extraAliases = {'toml': 'ini', 'hcl': 'ini', 'tf': 'ini', 'terraform': 'ini', 'zsh': 'bash', 'sh': 'bash', 'html': 'xml'};
@@ -134,4 +134,32 @@ TextSpan highlightCode(BuildContext context, String code, String? language, Text
         TextSpan(style: styles[n.className], children: walk(n.children ?? const [])),
   ];
   return TextSpan(style: base, children: walk(nodes));
+}
+
+/// Whether [language] (a fence name or alias) has a bundled grammar.
+bool hasGrammar(String? language) {
+  final l = language?.toLowerCase().trim();
+  return l != null && _languages.containsKey(_extraAliases[l] ?? l);
+}
+
+final _keywordCache = <String, List<String>>{};
+
+/// The keywords and built-ins of [language]'s grammar (for completion).
+List<String> languageKeywords(String? language) {
+  final l = language?.toLowerCase().trim();
+  if (l == null) return const [];
+  final name = _extraAliases[l] ?? l;
+  return _keywordCache.putIfAbsent(name, () {
+    final k = _languages[name]?.keywords;
+    final raw = switch (k) {
+      String s => s,
+      Map m => m.values.whereType<String>().join(' '),
+      _ => '',
+    };
+    final words = <String>{
+      for (final w in raw.split(RegExp(r'\s+')))
+        if (w.split('|').first case final x when RegExp(r'^[A-Za-z_][A-Za-z0-9_]+$').hasMatch(x)) x,
+    };
+    return words.toList()..sort();
+  });
 }
