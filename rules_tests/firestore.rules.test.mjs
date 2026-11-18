@@ -348,6 +348,8 @@ describe('TUCSON plan', () => {
     await assertSucceeds(updateDoc(doc(db, 'tucson_plan_links/l'), { outcome: 'taken' }));
     await assertSucceeds(setDoc(doc(db, 'tucson_plan_canvases/c'), canvas()));
     await assertSucceeds(setDoc(doc(db, 'tucson_plan_placements/c__a'), { canvasId: 'c', nodeId: 'a', x: 10, y: 1.5 }));
+    // A card resized on a canvas.
+    await assertSucceeds(updateDoc(doc(db, 'tucson_plan_placements/c__a'), { w: 400, h: 120 }));
     // Undo restores earlier states, old createdAt included.
     await assertSucceeds(setDoc(doc(db, 'tucson_plan_nodes/b'), node({ createdAt: new Date('2026-01-01') })));
     await assertSucceeds(getDocs(collection(db, 'tucson_plan_nodes')));
@@ -370,6 +372,9 @@ describe('TUCSON plan', () => {
     await assertFails(setDoc(doc(db, 'tucson_plan_canvases/c'), canvas({ viewScale: 0 })));
     await assertFails(setDoc(doc(db, 'tucson_plan_placements/c__b'), { canvasId: 'c', nodeId: 'a', x: 0, y: 0 }));
     await assertFails(setDoc(doc(db, 'tucson_plan_placements/c__a'), { canvasId: 'c', nodeId: 'a', x: '0', y: 0 }));
+    await assertFails(setDoc(doc(db, 'tucson_plan_placements/c__a'), { canvasId: 'c', nodeId: 'a', x: 0, y: 0, w: 10 }));
+    await assertFails(setDoc(doc(db, 'tucson_plan_placements/c__a'), { canvasId: 'c', nodeId: 'a', x: 0, y: 0, h: '120' }));
+    await assertFails(setDoc(doc(db, 'tucson_plan_placements/c__a'), { canvasId: 'c', nodeId: 'a', x: 0, y: 0, z: 1 }));
   });
 
   test('nobody else reads or writes the plan', async () => {

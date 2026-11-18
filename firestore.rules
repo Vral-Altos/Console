@@ -237,10 +237,12 @@ service cloud.firestore {
 
     // Placement ids are `<canvasId>__<nodeId>`.
     function isPlacement(id, d) {
-      return d.keys().hasOnly(['canvasId', 'nodeId', 'x', 'y'])
+      return d.keys().hasOnly(['canvasId', 'nodeId', 'x', 'y', 'w', 'h'])
         && isShortString(d.canvasId, 128) && isShortString(d.nodeId, 128)
         && id == d.canvasId + '__' + d.nodeId
-        && d.x is number && d.y is number;
+        && d.x is number && d.y is number
+        && (!('w' in d) || (d.w is number && d.w >= 80 && d.w <= 2000))
+        && (!('h' in d) || (d.h is number && d.h >= 32 && d.h <= 2000));
     }
 
     match /tucson_plan_nodes/{id} {
