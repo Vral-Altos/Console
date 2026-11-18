@@ -89,6 +89,19 @@ final agentsProvider = Provider<List<({String name, String? description})>>((ref
   return [for (final n in names) (name: n, description: info[n])];
 });
 
+/// Each agent's own model and effort, as its hosts report them.
+final agentDefaultsProvider = Provider<Map<String, ({String? model, String? effort})>>((ref) {
+  final hosts = ref.watch(allStatusProvider).value ?? const {};
+  final out = <String, ({String? model, String? effort})>{};
+  for (final h in hosts.values) {
+    for (final a in h.agents) {
+      final prev = out[a];
+      out[a] = (model: h.agentModels[a] ?? prev?.model, effort: h.agentEfforts[a] ?? prev?.effort);
+    }
+  }
+  return out;
+});
+
 /// The Console's pages.
 enum ConsolePage { overview, chat, projects, topology, billing, logs, system }
 

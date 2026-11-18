@@ -215,7 +215,7 @@ class AgentReply extends StatelessWidget {
     // What the turn used, always shown: model, tokens, cost, the account's
     // quota after it.
     final usage = [
-      if (m.model != null) modelName(m.model),
+      if (m.model != null) [modelName(m.model), ?m.effort].join(' '),
       if ((m.contextTokens ?? 0) > 0) '${compact(m.contextTokens)} context',
       if ((m.outputTokens ?? 0) > 0) '${compact(m.outputTokens)} out',
       if (m.costUsd != null) usd(m.costUsd),

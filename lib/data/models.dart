@@ -20,6 +20,11 @@ enum ChatPurpose {
   static ChatPurpose? parse(Object? v) => values.where((p) => p.name == v).firstOrNull;
 }
 
+/// What the operator can pick per conversation; the worker accepts only
+/// these (agent_mesh `SessionManager.models` / `efforts`).
+const chatModels = ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5', 'claude-fable-5-2'];
+const chatEfforts = ['low', 'medium', 'high', 'xhigh', 'max'];
+
 /// A conversation with one agent (`threads/{id}` in the platform database).
 /// [title] is its topic; the Console shows it as [ChatNaming.name].
 @freezed
@@ -48,6 +53,11 @@ abstract class ChatThread with _$ChatThread {
 
     /// The agent that posted it, for a conversation between agents.
     String? from,
+
+    /// The operator's model and effort for this conversation (Claude Code
+    /// `--model` / `--effort`); null = the agent's own.
+    String? model,
+    String? effort,
   }) = _ChatThread;
 
   /// The project it is listed under.
@@ -130,6 +140,7 @@ abstract class ChatMessage with _$ChatMessage {
     int? outputTokens,
     int? contextTokens,
     int? durationMs,
+    String? effort,
     String? model,
 
     /// The account's 5-hour and 7-day usage after the turn.
@@ -177,6 +188,10 @@ abstract class HostStatus with _$HostStatus {
 
     /// Agent name → its one-line description.
     @Default(<String, String>{}) Map<String, String> agentInfo,
+
+    /// Agent name → its own model and effort (`agent.json`, `settings.json`).
+    @Default(<String, String>{}) Map<String, String> agentModels,
+    @Default(<String, String>{}) Map<String, String> agentEfforts,
     DateTime? startedAt,
     String? revision,
     DateTime? lastRunAt,

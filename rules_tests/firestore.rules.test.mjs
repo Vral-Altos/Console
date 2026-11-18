@@ -6,7 +6,7 @@ import { after, before, beforeEach, describe, test } from 'node:test';
 
 import { assertFails, assertSucceeds, initializeTestEnvironment } from '@firebase/rules-unit-testing';
 import {
-  collection, deleteDoc, doc, getDoc, getDocs, serverTimestamp, setDoc, updateDoc, writeBatch,
+  collection, deleteDoc, doc, getDoc, getDocs, serverTimestamp, deleteField, setDoc, updateDoc, writeBatch,
 } from 'firebase/firestore';
 
 const port = Number.parseInt(process.env.FIRESTORE_EMULATOR_PORT ?? '8086', 10);
@@ -136,6 +136,14 @@ describe('threads', () => {
     await assertSucceeds(updateDoc(doc(owner(), 'threads/t1'), { project: null, projectSet: true }));
     await assertSucceeds(updateDoc(doc(owner(), 'threads/t1'), { purpose: 'research' }));
     await assertSucceeds(updateDoc(doc(owner(), 'threads/t1'), { title: 'Topic', titleSet: true }));
+  });
+
+  test('the operator picks a conversation\'s model and effort, from the offered ones', async () => {
+    await assertSucceeds(updateDoc(doc(owner(), 'threads/t1'), { model: 'claude-sonnet-5-5', effort: 'high' }));
+    await assertSucceeds(updateDoc(doc(owner(), 'threads/t1'), { model: deleteField(), effort: deleteField() }));
+    await assertFails(updateDoc(doc(owner(), 'threads/t1'), { model: 'gpt-5' }));
+    await assertFails(updateDoc(doc(owner(), 'threads/t1'), { effort: 'ludicrous' }));
+    await assertFails(updateDoc(doc(stranger(), 'threads/t1'), { model: 'claude-opus-5-5' }));
   });
 
   test('bad filing, and the costs and names only workers write, are refused', async () => {

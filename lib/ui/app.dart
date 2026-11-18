@@ -6,6 +6,7 @@ import '../data/firebase.dart';
 import '../data/providers.dart';
 import 'shell.dart';
 import 'theme.dart';
+import '../data/platform/standalone.dart';
 
 class ConsoleApp extends ConsumerWidget {
   const ConsoleApp({super.key, this.fonts = true});
@@ -76,7 +77,14 @@ class _SignInPageState extends State<SignInPage> {
       _error = null;
     });
     try {
-      await widget.auth.signInWithPopup(GoogleAuthProvider()..setCustomParameters({'prompt': 'select_account'}));
+      final google = GoogleAuthProvider()..setCustomParameters({'prompt': 'select_account'});
+      // An installed app (iPhone home screen) cannot open the sign-in popup:
+      // it goes to Google and comes back; Firebase picks the result up on load.
+      if (runningStandalone) {
+        await widget.auth.signInWithRedirect(google);
+      } else {
+        await widget.auth.signInWithPopup(google);
+      }
     } on FirebaseAuthException catch (e) {
       if (mounted) setState(() => _error = e.message ?? e.code);
     } finally {

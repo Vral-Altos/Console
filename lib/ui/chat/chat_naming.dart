@@ -60,8 +60,7 @@ class ChatUsageBar extends ConsumerWidget {
     final sevenDay = account?.sevenDay ?? last?.quota?.sevenDay;
     final turns = messages.where((m) => !m.fromOperator && m.costUsd != null).length;
     final chips = <Widget>[
-      if (!compact && last?.model != null)
-        UsageChip(icon: Icons.memory, label: modelName(last!.model), tooltip: 'Model of the last reply: ${last.model}'),
+      ModelEffortMenu(thread: thread, compact: compact),
       if (fiveHour != null && (!compact || (sevenDay?.utilization ?? 0) <= fiveHour.utilization))
         QuotaChip(window: '5h', usage: fiveHour, account: account?.label ?? last?.accountId),
       if (sevenDay != null && (!compact || (fiveHour?.utilization ?? 0) < sevenDay.utilization))
@@ -135,6 +134,99 @@ class QuotaChip extends StatelessWidget {
           Text(pct(u), style: text.labelSmall?.copyWith(color: color, fontFeatures: const [FontFeature.tabularFigures()])),
         ]),
       ),
+    );
+  }
+}
+
+/// `Opus 5.5 · medium`: the conversation's model and effort, the agent's
+/// own where the operator has not chosen.
+String modelEffortLabel(String? model, String? effort) =>
+    [if (model != null) modelName(model), ?effort].join(' · ');
+
+/// The conversation's model and effort, and the menu to change them. A
+/// choice applies from the next message; "Agent default" clears it.
+class ModelEffortMenu extends ConsumerWidget {
+  const ModelEffortMenu({super.key, required this.thread, this.compact = false});
+  final ChatThread thread;
+  final bool compact;
+
+  static const efforts = {
+    'low': 'Low — quickest, cheapest',
+    'medium': 'Medium',
+    'high': 'High',
+    'xhigh': 'Extra high',
+    'max': 'Max — slowest, most thorough',
+  };
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = Tokens.of(context);
+    final text = Theme.of(context).textTheme;
+    final own = ref.watch(agentDefaultsProvider)[thread.agent];
+    final model = thread.model ?? own?.model;
+    final effort = thread.effort ?? own?.effort;
+    final chosen = thread.model != null || thread.effort != null;
+    final label = modelEffortLabel(model, effort);
+    final repo = ref.read(repositoryProvider);
+
+    void set({String? model, String? effort}) => guarded(
+      context,
+      () => repo!.setModelEffort(thread.id, model: model, effort: effort),
+    );
+
+    PopupMenuItem<String> heading(String s) => PopupMenuItem<String>(
+      enabled: false,
+      height: 28,
+      child: Text(s, style: text.labelSmall?.copyWith(color: t.faint, letterSpacing: .6)),
+    );
+
+    return PopupMenuButton<String>(
+      key: const Key('model-effort'),
+      tooltip: 'Model and effort for this conversation',
+      onSelected: (v) {
+        final (kind, value) = (v.substring(0, 2), v.substring(2));
+        if (kind == 'm:') set(model: value.isEmpty ? null : value, effort: thread.effort);
+        if (kind == 'e:') set(model: thread.model, effort: value.isEmpty ? null : value);
+      },
+      itemBuilder: (_) => [
+        heading('MODEL'),
+        CheckedPopupMenuItem(
+          value: 'm:',
+          checked: thread.model == null,
+          child: Text('Agent default${own?.model == null ? '' : ' (${modelName(own!.model)})'}'),
+        ),
+        for (final m in chatModels)
+          CheckedPopupMenuItem(value: 'm:$m', checked: thread.model == m, child: Text(modelName(m))),
+        const PopupMenuDivider(),
+        heading('EFFORT'),
+        CheckedPopupMenuItem(
+          value: 'e:',
+          checked: thread.effort == null,
+          child: Text('Agent default${own?.effort == null ? '' : ' (${own!.effort})'}'),
+        ),
+        for (final e in efforts.entries)
+          CheckedPopupMenuItem(value: 'e:${e.key}', checked: thread.effort == e.key, child: Text(e.value)),
+      ],
+      child: compact
+          ? Padding(
+              padding: const EdgeInsets.all(6),
+              child: Icon(Icons.tune, size: 18, color: chosen ? t.info : t.muted),
+            )
+          : Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: t.sunken,
+                borderRadius: BorderRadius.circular(8),
+                border: chosen ? Border.all(color: t.info.withValues(alpha: .5)) : null,
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.memory, size: 13, color: chosen ? t.info : t.muted),
+                const SizedBox(width: 5),
+                Text(label.isEmpty ? 'Default' : label,
+                    style: text.labelSmall?.copyWith(color: chosen ? t.info : t.muted)),
+                Icon(Icons.arrow_drop_down, size: 16, color: t.faint),
+              ]),
+            ),
     );
   }
 }

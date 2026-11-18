@@ -122,6 +122,21 @@ class ConsoleRepository {
     );
   }
 
+  /// Sets the conversation's model and effort (null: the agent's own); the
+  /// next turn runs with them.
+  Future<void> setModelEffort(String threadId, {required String? model, required String? effort}) {
+    if (model != null && !chatModels.contains(model)) throw ArgumentError.value(model, 'model');
+    if (effort != null && !chatEfforts.contains(effort)) throw ArgumentError.value(effort, 'effort');
+    return _threads.doc(threadId).update({
+      'model': model ?? FieldValue.delete(),
+      'effort': effort ?? FieldValue.delete(),
+    }).then((_) => unawaited(_audit('Set a conversation\'s model and effort', {
+      'threadId': threadId,
+      'model': model ?? 'default',
+      'effort': effort ?? 'default',
+    })));
+  }
+
   /// Files [threadId] under [project] (null: General); the namer leaves it.
   Future<void> setProject(String threadId, String? project) async {
     await _threads.doc(threadId).update({'project': project, 'projectSet': true});
@@ -457,6 +472,8 @@ ChatThread threadFrom(String id, Map<String, dynamic> d) => ChatThread(
   costUsd: _double(d['costUsd']) ?? 0,
   namedAt: _time(d['namedAt']),
   from: d['from'] as String?,
+  model: chatModels.contains(d['model']) ? d['model'] as String : null,
+  effort: chatEfforts.contains(d['effort']) ? d['effort'] as String : null,
 );
 
 ChatProject chatProjectFrom(String id, Map<String, dynamic> d) =>
@@ -499,6 +516,7 @@ ChatMessage messageFrom(String id, Map<String, dynamic> d) => ChatMessage(
   contextTokens: _int(d['contextTokens']),
   durationMs: _int(d['durationMs']),
   model: d['model'] as String?,
+  effort: d['effort'] as String?,
   quota: _quota(d['quota']),
   stopped: d['stopped'] as bool? ?? false,
   attachments: [
@@ -555,6 +573,14 @@ HostStatus hostFrom(Map<String, dynamic> d) {
     agentInfo: {
       for (final e in ((d['agentInfo'] as Map?) ?? const {}).entries)
         if ((e.value as Map?)?['description'] is String) '${e.key}': (e.value as Map)['description'] as String,
+    },
+    agentModels: {
+      for (final e in ((d['agentInfo'] as Map?) ?? const {}).entries)
+        if ((e.value as Map?)?['model'] is String) '${e.key}': (e.value as Map)['model'] as String,
+    },
+    agentEfforts: {
+      for (final e in ((d['agentInfo'] as Map?) ?? const {}).entries)
+        if ((e.value as Map?)?['effort'] is String) '${e.key}': (e.value as Map)['effort'] as String,
     },
     startedAt: _time(d['startedAt']),
     revision: d['revision'] as String?,

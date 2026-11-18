@@ -173,6 +173,20 @@ void main() {
     expect(threadFrom(id, (await db.doc('threads/$id').get()).data()!).projectName, 'General');
   });
 
+  test('a conversation\'s model and effort are set, cleared, and only from the offered ones', () async {
+    final id = await repo.startThread(agent: 'genie', text: 'hello');
+    await repo.setModelEffort(id, model: 'claude-sonnet-5-5', effort: 'high');
+    var th = threadFrom(id, (await db.doc('threads/$id').get()).data()!);
+    expect((th.model, th.effort), ('claude-sonnet-5-5', 'high'));
+    await repo.setModelEffort(id, model: null, effort: 'low');
+    final raw = (await db.doc('threads/$id').get()).data()!;
+    expect(raw.containsKey('model'), isFalse);
+    th = threadFrom(id, raw);
+    expect((th.model, th.effort), (null, 'low'));
+    expect(() => repo.setModelEffort(id, model: 'gpt-5', effort: null), throwsArgumentError);
+    expect(threadFrom('x', {'agent': 'genie', 'title': 't', 'model': 'gpt-5'}).model, isNull);
+  });
+
   test('a new thread is filed when the operator picks a project, else left to the namer', () async {
     final auto = await repo.startThread(agent: 'genie', text: 'a');
     final general = await repo.startThread(agent: 'genie', text: 'b', filing: (project: null));

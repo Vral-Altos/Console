@@ -42,7 +42,7 @@ service cloud.firestore {
         && request.resource.data.get('projectSet', false) is bool;
       allow update: if isOwner()
         && request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['title', 'titleSet', 'pinned', 'archived', 'project', 'projectSet', 'purpose'])
+             .hasOnly(['title', 'titleSet', 'pinned', 'archived', 'project', 'projectSet', 'purpose', 'model', 'effort'])
         && isShortString(request.resource.data.title, 200)
         && request.resource.data.get('pinned', false) is bool
         && request.resource.data.get('archived', false) is bool
@@ -50,7 +50,10 @@ service cloud.firestore {
         && request.resource.data.get('projectSet', false) is bool
         && isProject(request.resource.data.get('project', null))
         && request.resource.data.get('purpose', 'other')
-             in ['build', 'fix', 'research', 'plan', 'advice', 'ops', 'admin', 'other'];
+             in ['build', 'fix', 'research', 'plan', 'advice', 'ops', 'admin', 'other']
+        && request.resource.data.get('model', 'claude-opus-5-5')
+             in ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5', 'claude-fable-5-2']
+        && request.resource.data.get('effort', 'medium') in ['low', 'medium', 'high', 'xhigh', 'max'];
       allow delete: if false;
     }
 

@@ -1,12 +1,14 @@
 {
+    "id": "/",
     "name": "Vral Altos Console",
     "short_name": "Vral Altos",
-    "start_url": ".",
+    "start_url": "/",
+    "scope": "/",
     "display": "standalone",
     "background_color": "#151514",
-    "theme_color": "#4A5BD4",
+    "theme_color": "#151514",
     "description": "Agents, projects and the running system.",
-    "orientation": "portrait-primary",
+    "orientation": "any",
     "prefer_related_applications": false,
     "icons": [
         {

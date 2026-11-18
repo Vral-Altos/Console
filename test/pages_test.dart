@@ -42,6 +42,8 @@ final now = DateTime.now();
 final today = operatorDay(now);
 
 HostStatus macStatus() => HostStatus(
+  agentModels: const {'financier': 'claude-opus-5-5'},
+  agentEfforts: const {'financier': 'medium'},
   lastSeen: now,
   host: 'air',
   agents: const ['genie', 'financier'],
@@ -233,7 +235,7 @@ void main() {
     await tester.pump(); // The registry's snapshot arrives.
     expect(find.byType(QuotaChip), findsNWidgets(2));
     expect(find.text('61%'), findsOneWidget, reason: 'live usage beats the reply\'s snapshot');
-    expect(find.text('Opus 5.5'), findsOneWidget);
+    expect(find.text('Opus 5.5 · medium'), findsOneWidget, reason: 'the agent\'s own model and effort');
     expect(find.text('\$1.23'), findsOneWidget);
     // Tools fold to one line and open to the list.
     expect(find.text('Used Read ×2 · 4s'), findsOneWidget);
@@ -863,6 +865,28 @@ void main() {
       expect(find.byTooltip('Remove shot.png'), findsOneWidget, reason: 'files come back too');
       expect(tester.takeException(), isNull);
     });
+  });
+
+  testWidgets('chat header: the model and effort menu shows the choice and offers every option', (tester) async {
+    size(tester, const Size(1300, 900));
+    await tester.pumpWidget(host(const ConversationView(threadId: 't1'), [
+      ...overridesWith(threads: [
+        ChatThread(id: 't1', agent: 'financier', title: 'Budget', model: 'claude-sonnet-5-5', effort: 'high', createdAt: DateTime.utc(2026, 11, 18)),
+      ]),
+      messagesProvider('t1').overrideWith((ref) => Stream.value(const <ChatMessage>[])),
+    ]));
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('Sonnet 5.5 · high'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('model-effort')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('Agent default (Opus 5.5)'), findsOneWidget);
+    expect(find.text('Agent default (medium)'), findsOneWidget);
+    for (final label in ['Opus 5.5', 'Haiku 5.5', 'Fable 5.2', 'Low — quickest, cheapest', 'Extra high', 'Max — slowest, most thorough']) {
+      expect(find.text(label), findsOneWidget, reason: label);
+    }
+    expect(tester.takeException(), isNull);
   });
 }
 

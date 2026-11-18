@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
+import 'platform/standalone.dart';
 
 typedef FirebaseServices = ({FirebaseAuth auth, FirebaseFirestore db, FirebaseStorage storage});
 
@@ -24,7 +25,12 @@ Future<FirebaseServices?> initializeFirebase() async {
   const appId = String.fromEnvironment('FIREBASE_APP_ID');
   const senderId = String.fromEnvironment('FIREBASE_MESSAGING_SENDER_ID');
   const projectId = String.fromEnvironment('FIREBASE_PROJECT_ID');
-  const authDomain = String.fromEnvironment('FIREBASE_AUTH_DOMAIN');
+  const configuredAuthDomain = String.fromEnvironment('FIREBASE_AUTH_DOMAIN');
+  // Installed on a phone, sign-in is a redirect, and Safari only completes a
+  // redirect that returns to the same site: there the auth domain is the
+  // Console's own (Firebase Hosting serves /__/auth on it). In a browser tab
+  // the configured domain and popup stay as they are.
+  final authDomain = runningStandalone && (pageHost ?? '').endsWith('vraltos.dev') ? pageHost! : configuredAuthDomain;
   if (apiKey.isEmpty || appId.isEmpty || projectId.isEmpty) return null;
 
   final app = await Firebase.initializeApp(
