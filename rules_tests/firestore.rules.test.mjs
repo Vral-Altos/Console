@@ -324,3 +324,61 @@ describe('telemetry', () => {
     await assertFails(setDoc(doc(owner(), 'metrics/x'), { source: 'console' }));
   });
 });
+
+describe('TUCSON plan', () => {
+  const node = (extra = {}) => ({
+    kind: 'task', title: 'Write the brief', notes: '', status: 'planned', priority: 2,
+    startAt: new Date('2026-11-18T02:00:00Z'), endAt: new Date('2026-11-18T03:00:00Z'), dueAt: null,
+    createdAt: serverTimestamp(), updatedAt: serverTimestamp(), ...extra,
+  });
+  const link = (extra = {}) => ({
+    from: 'a', to: 'b', kind: 'branch', condition: 'visa approved', outcome: 'pending',
+    createdAt: serverTimestamp(), updatedAt: serverTimestamp(), ...extra,
+  });
+  const canvas = (extra = {}) => ({
+    name: 'Plan', kind: 'timescale', order: 1, viewX: -120.5, viewY: 0, viewScale: 1, pxPerHour: 60,
+    showAllTimed: true, createdAt: serverTimestamp(), updatedAt: serverTimestamp(), ...extra,
+  });
+
+  test('the owner writes, reads and deletes nodes, links, canvases and placements', async () => {
+    const db = owner();
+    await assertSucceeds(setDoc(doc(db, 'tucson_plan_nodes/a'), node()));
+    await assertSucceeds(updateDoc(doc(db, 'tucson_plan_nodes/a'), { status: 'done', startAt: null }));
+    await assertSucceeds(setDoc(doc(db, 'tucson_plan_links/l'), link()));
+    await assertSucceeds(updateDoc(doc(db, 'tucson_plan_links/l'), { outcome: 'taken' }));
+    await assertSucceeds(setDoc(doc(db, 'tucson_plan_canvases/c'), canvas()));
+    await assertSucceeds(setDoc(doc(db, 'tucson_plan_placements/c__a'), { canvasId: 'c', nodeId: 'a', x: 10, y: 1.5 }));
+    // Undo restores earlier states, old createdAt included.
+    await assertSucceeds(setDoc(doc(db, 'tucson_plan_nodes/b'), node({ createdAt: new Date('2026-01-01') })));
+    await assertSucceeds(getDocs(collection(db, 'tucson_plan_nodes')));
+    for (const p of ['tucson_plan_nodes/a', 'tucson_plan_links/l', 'tucson_plan_canvases/c', 'tucson_plan_placements/c__a']) {
+      await assertSucceeds(deleteDoc(doc(db, p)));
+    }
+  });
+
+  test('malformed documents are refused', async () => {
+    const db = owner();
+    await assertFails(setDoc(doc(db, 'tucson_plan_nodes/a'), node({ kind: 'epic' })));
+    await assertFails(setDoc(doc(db, 'tucson_plan_nodes/a'), node({ priority: 4 })));
+    await assertFails(setDoc(doc(db, 'tucson_plan_nodes/a'), node({ startAt: 'tomorrow' })));
+    await assertFails(setDoc(doc(db, 'tucson_plan_nodes/a'), node({ owner: 'x' })));
+    await assertFails(setDoc(doc(db, 'tucson_plan_nodes/a'), node({ title: 'x'.repeat(501) })));
+    await assertFails(setDoc(doc(db, 'tucson_plan_links/l'), link({ to: 'a' })));
+    await assertFails(setDoc(doc(db, 'tucson_plan_links/l'), link({ outcome: 'maybe' })));
+    await assertFails(setDoc(doc(db, 'tucson_plan_canvases/c'), canvas({ kind: 'kanban' })));
+    await assertFails(setDoc(doc(db, 'tucson_plan_canvases/c'), canvas({ name: '' })));
+    await assertFails(setDoc(doc(db, 'tucson_plan_canvases/c'), canvas({ viewScale: 0 })));
+    await assertFails(setDoc(doc(db, 'tucson_plan_placements/c__b'), { canvasId: 'c', nodeId: 'a', x: 0, y: 0 }));
+    await assertFails(setDoc(doc(db, 'tucson_plan_placements/c__a'), { canvasId: 'c', nodeId: 'a', x: '0', y: 0 }));
+  });
+
+  test('nobody else reads or writes the plan', async () => {
+    await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), 'tucson_plan_nodes/a'), { kind: 'task', title: 'x' }));
+    for (const db of [otherAccount(), unverified(), stranger(), anonymous()]) {
+      await assertFails(getDoc(doc(db, 'tucson_plan_nodes/a')));
+      await assertFails(setDoc(doc(db, 'tucson_plan_nodes/b'), node()));
+      await assertFails(deleteDoc(doc(db, 'tucson_plan_nodes/a')));
+      await assertFails(setDoc(doc(db, 'tucson_plan_placements/c__a'), { canvasId: 'c', nodeId: 'a', x: 0, y: 0 }));
+    }
+  });
+});

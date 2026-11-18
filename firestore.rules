@@ -185,5 +185,76 @@ service cloud.firestore {
         && request.resource.data.decidedAt == request.time;
       allow create, delete: if false;
     }
+
+    // TUCSON's plan (the TUCSON app, tools/TUCSON/app; models in
+    // tools/TUCSON/plan_core). The operator edits it freely, so undo can
+    // restore any earlier state; the rules keep each document's shape.
+    function isOptionalTime(d, field) {
+      return !(field in d) || d[field] == null || d[field] is timestamp;
+    }
+
+    function isText(v, max) {
+      return v is string && v.size() <= max;
+    }
+
+    function isPlanNode(d) {
+      return d.keys().hasOnly(['kind', 'title', 'notes', 'status', 'priority', 'startAt', 'endAt', 'dueAt', 'createdAt', 'updatedAt'])
+        && d.kind in ['goal', 'project', 'milestone', 'feature', 'task', 'subtask', 'session', 'event', 'decision', 'note']
+        && isText(d.title, 500)
+        && isText(d.get('notes', ''), 20000)
+        && d.get('status', 'planned') in ['planned', 'active', 'done', 'dropped']
+        && d.get('priority', 0) is int && d.get('priority', 0) >= 0 && d.get('priority', 0) <= 3
+        && isOptionalTime(d, 'startAt') && isOptionalTime(d, 'endAt') && isOptionalTime(d, 'dueAt')
+        && isOptionalTime(d, 'createdAt') && isOptionalTime(d, 'updatedAt');
+    }
+
+    function isPlanLink(d) {
+      return d.keys().hasOnly(['from', 'to', 'kind', 'condition', 'outcome', 'createdAt', 'updatedAt'])
+        && isShortString(d.from, 128) && isShortString(d.to, 128) && d.from != d.to
+        && d.kind in ['breakdown', 'dependency', 'branch']
+        && isText(d.get('condition', ''), 500)
+        && d.get('outcome', 'pending') in ['pending', 'taken', 'rejected']
+        && isOptionalTime(d, 'createdAt') && isOptionalTime(d, 'updatedAt');
+    }
+
+    function isPlanCanvas(d) {
+      return d.keys().hasOnly(['name', 'kind', 'order', 'viewX', 'viewY', 'viewScale', 'pxPerHour', 'showAllTimed', 'createdAt', 'updatedAt'])
+        && isShortString(d.name, 80)
+        && d.kind in ['flow', 'timescale']
+        && d.get('order', 0) is number
+        && d.get('viewX', 0) is number && d.get('viewY', 0) is number
+        && d.get('viewScale', 1) is number && d.get('viewScale', 1) > 0
+        && d.get('pxPerHour', 60) is number && d.get('pxPerHour', 60) > 0
+        && d.get('showAllTimed', true) is bool
+        && isOptionalTime(d, 'createdAt') && isOptionalTime(d, 'updatedAt');
+    }
+
+    // Placement ids are `<canvasId>__<nodeId>`.
+    function isPlacement(id, d) {
+      return d.keys().hasOnly(['canvasId', 'nodeId', 'x', 'y'])
+        && isShortString(d.canvasId, 128) && isShortString(d.nodeId, 128)
+        && id == d.canvasId + '__' + d.nodeId
+        && d.x is number && d.y is number;
+    }
+
+    match /tucson_plan_nodes/{id} {
+      allow read, delete: if isOwner();
+      allow create, update: if isOwner() && isPlanNode(request.resource.data);
+    }
+
+    match /tucson_plan_links/{id} {
+      allow read, delete: if isOwner();
+      allow create, update: if isOwner() && isPlanLink(request.resource.data);
+    }
+
+    match /tucson_plan_canvases/{id} {
+      allow read, delete: if isOwner();
+      allow create, update: if isOwner() && isPlanCanvas(request.resource.data);
+    }
+
+    match /tucson_plan_placements/{id} {
+      allow read, delete: if isOwner();
+      allow create, update: if isOwner() && isPlacement(id, request.resource.data);
+    }
   }
 }
