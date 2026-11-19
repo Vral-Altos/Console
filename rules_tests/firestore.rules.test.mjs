@@ -68,6 +68,7 @@ beforeEach(async () => {
     await setDoc(doc(db, 'usage_days/2026-11-04'), { turns: 1 });
     await setDoc(doc(db, 'billing/current'), { costAmount: 1 });
     await setDoc(doc(db, 'topology/current'), { resources: [] });
+    await setDoc(doc(db, 'encephalon/plan'), { source: 'plan', entries: [] });
     await setDoc(doc(db, 'billing/breakdown'), { status: 'ok', total: 1 });
     await setDoc(doc(db, 'logs/l1'), { source: 'mac-worker', message: 'x' });
     await setDoc(doc(db, 'metrics/mac-worker~2026110410'), { source: 'mac-worker' });
@@ -76,7 +77,7 @@ beforeEach(async () => {
 
 describe('reads', () => {
   const readable = ['threads/t1', 'messages/m1', 'status/mac', 'agent_mesh/state', 'autobench/latest', 'devstations/d1',
-    'stats/usage', 'usage_days/2026-11-04', 'billing/current', 'billing/breakdown', 'topology/current', 'logs/l1', 'metrics/mac-worker~2026110410', 'agent_commands/genie'];
+    'stats/usage', 'usage_days/2026-11-04', 'billing/current', 'billing/breakdown', 'topology/current', 'encephalon/plan', 'logs/l1', 'metrics/mac-worker~2026110410', 'agent_commands/genie'];
 
   test('the operator reads the Console data', async () => {
     for (const path of readable) {
@@ -119,6 +120,13 @@ describe('threads', () => {
     await assertSucceeds(updateDoc(doc(owner(), 'threads/t1'), { title: 'Renamed' }));
     await assertSucceeds(updateDoc(doc(owner(), 'threads/t1'), { pinned: true }));
     await assertSucceeds(updateDoc(doc(owner(), 'threads/t1'), { archived: true }));
+  });
+
+  test('Full Permissions Granted: the operator switches it on and off; nothing else', async () => {
+    await assertSucceeds(updateDoc(doc(owner(), 'threads/t1'), { permissionMode: 'full' }));
+    await assertSucceeds(updateDoc(doc(owner(), 'threads/t1'), { permissionMode: deleteField() }));
+    await assertFails(updateDoc(doc(owner(), 'threads/t1'), { permissionMode: 'root' }));
+    await assertFails(updateDoc(doc(stranger(), 'threads/t1'), { permissionMode: 'full' }));
   });
 
   test('other thread changes, and deletes, are refused', async () => {
@@ -200,6 +208,9 @@ describe('messages', () => {
     await assertFails(setDoc(doc(owner(), 'messages/b'), message({ status: 'done' })));
     await assertFails(setDoc(doc(owner(), 'messages/c'), message({ kind: 'shell' })));
     await assertFails(setDoc(doc(owner(), 'messages/d'), message({ claimedBy: 'mac' })));
+    // The grant is the worker's to mark, from the thread's switch.
+    await assertFails(setDoc(doc(owner(), 'messages/g'), message({ grant: 'full' })));
+    await assertFails(updateDoc(doc(owner(), 'messages/q1'), { grant: 'full' }));
     await assertFails(setDoc(doc(owner(), 'messages/e'), message({ text: '' })));
     await assertFails(setDoc(doc(owner(), 'messages/f'), message({ text: 'x'.repeat(20001) })));
   });
@@ -413,5 +424,13 @@ describe('TUCSON plan', () => {
     await assertFails(deleteDoc(doc(db, 'tucson_plan_changes/c1')));
     await assertFails(setDoc(doc(db, 'tucson_plan_sync/calendar'), { events: 0 }));
     await assertFails(getDoc(doc(stranger(), 'tucson_plan_changes/c1')));
+  });
+});
+
+describe('encephalon', () => {
+  test('the operator reads the index; nobody writes it from a client', async () => {
+    await assertSucceeds(getDoc(doc(owner(), 'encephalon/plan')));
+    await assertFails(setDoc(doc(owner(), 'encephalon/plan'), { source: 'plan', entries: [] }));
+    await assertFails(getDoc(doc(stranger(), 'encephalon/plan')));
   });
 });
